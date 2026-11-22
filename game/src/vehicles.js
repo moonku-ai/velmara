@@ -88,7 +88,10 @@ const Vehicles = {
     const steerTarget = steerIn * (0.55 + 0.45 * Math.max(0, 1 - Math.abs(car.speed) / maxF));
     car.steer += (steerTarget - car.steer) * Math.min(1, dt * 7);
     if (Math.abs(car.speed) > 0.3) {
-      car.yaw -= car.steer * (car.speed / maxF) * 2.1 * dt * Math.sign(car.speed);
+      // Turn rate keeps a floor at low speed: a car that can barely turn
+      // while creeping cannot get out of a dead end.
+      const spdFactor = Math.min(1, 0.3 + Math.abs(car.speed) / 14);
+      car.yaw -= car.steer * spdFactor * 1.9 * dt * Math.sign(car.speed);
     }
     let nx = car.x + Math.sin(car.yaw) * car.speed * dt * -1;
     let nz = car.z + Math.cos(car.yaw) * car.speed * dt * -1;

@@ -89,10 +89,19 @@ const Combat = {
   },
 
   // Enemy return fire: hitscan with a miss chance that grows with distance.
+  // Shots at a player inside a car damage the CAR, not the driver.
   enemyShoot(enemy, player, dist) {
     AudioSys.noiseBurst(0.1, 0.16, 1400);
     const hitChance = Math.max(0.12, 0.55 - dist * 0.011);
-    if (Math.random() < hitChance) Game.damagePlayer(7 + Math.random() * 6, enemy.name || 'shooter');
+    if (Math.random() < hitChance) {
+      const dmg = 7 + Math.random() * 6;
+      if (player.inCar) {
+        player.inCar.hp = Math.max(0, player.inCar.hp - dmg);
+        if (player.inCar.hp <= 0) Game.carWrecked();
+      } else {
+        Game.damagePlayer(dmg, enemy.name || 'shooter');
+      }
+    }
     // Tracer from the enemy toward the player.
     const scene = City.scene;
     if (scene) {
