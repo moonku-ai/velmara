@@ -17,7 +17,19 @@ const Missions = {
     HUD.dialog(def.giver, def.brief);
     AudioSys.mission();
     Game.spawnMissionCar(def);
+    // Stage 0 may already need actors (a tail target, a kill squad) —
+    // setup runs for the opening stage as well as for every advance.
+    Missions.setupStage(Missions.currentStage());
     return true;
+  },
+
+  // Spawn whatever the stage needs: enemies for a kill stage, the courier
+  // for a tail stage, the wanted level for an escape stage.
+  setupStage(st) {
+    if (!st) return;
+    if (st.type === 'kill') Missions.spawnStageEnemies(st);
+    if (st.type === 'tail') Missions.spawnTailTarget(st);
+    if (st.type === 'escape') Police.setWanted(st.wanted || 4);
   },
 
   currentStage() {
@@ -54,10 +66,7 @@ const Missions = {
     m.stage++;
     S.killsThisMission = 0;
     if (m.stage >= m.def.stages.length) { Missions.complete(); return; }
-    const st = Missions.currentStage();
-    if (st.type === 'kill') Missions.spawnStageEnemies(st);
-    if (st.type === 'tail') Missions.spawnTailTarget(st);
-    if (st.type === 'escape') Police.setWanted(st.wanted || 4);
+    Missions.setupStage(Missions.currentStage());
     Missions.showStage();
     AudioSys.pickup();
   },
