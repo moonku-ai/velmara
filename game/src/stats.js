@@ -32,7 +32,7 @@ const Stats = {
     rows.push(`<div class="stats-title">RHEA SOLANO — ${rankFor(S.rp).name.toUpperCase()} · ${S.rp} RP</div>`);
     rows.push(`<div class="stats-big">${pct.toFixed(1)}% COMPLETE</div>`);
     rows.push('<div class="stats-sec">CHECKLIST</div>');
-    const check = (label, done, total) => `<div class="stats-row"><span>${label}</span><span>${done}/${total}</span></div>`;
+    const check = (label, done, total) => `<div class="stats-row"><span>${label}</span><span>${done}${total === '' ? '' : '/' + total}</span></div>`;
     rows.push(check('Story missions', S.missionsDone, 6));
     rows.push(check('Street races', S.racesDone, 4));
     rows.push(check('Hidden packages', S.packages, 10));
@@ -78,20 +78,28 @@ const Stats = {
     const mz = (z) => ((z + half) / (half * 2)) * H;
     ctx.fillStyle = '#0d1526';
     ctx.fillRect(0, 0, W, H);
+    // Canal first, so district labels drawn later sit on top of it.
+    ctx.fillStyle = '#0e3a4a';
+    ctx.fillRect(mx(CFG.canal.x0), mz(CFG.canal.z0), (CFG.canal.x1 - CFG.canal.x0) / (half * 2) * W, (CFG.canal.z1 - CFG.canal.z0) / (half * 2) * H);
     for (const d of DISTRICTS) {
       const v = S.districtStanding[d.name];
       ctx.fillStyle = d.color + (v >= 70 ? '55' : v >= 40 ? '33' : '18');
       ctx.fillRect(mx(d.x0), mz(d.z0), (d.x1 - d.x0) / (half * 2) * W, (d.z1 - d.z0) / (half * 2) * H);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px system-ui';
-      ctx.fillText(`${d.name.toUpperCase()} · ${standingLabel(v)} ${Math.round(v)}`, mx(d.x0) + 8, mz(d.z0) + 20);
     }
-    ctx.fillStyle = '#0e3a4a';
-    ctx.fillRect(mx(CFG.canal.x0), mz(CFG.canal.z0), (CFG.canal.x1 - CFG.canal.x0) / (half * 2) * W, (CFG.canal.z1 - CFG.canal.z0) / (half * 2) * H);
     ctx.strokeStyle = '#3a4358';
     for (const r of CFG.roads) {
       ctx.beginPath(); ctx.moveTo(mx(r), 0); ctx.lineTo(mx(r), H); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, mz(r)); ctx.lineTo(W, mz(r)); ctx.stroke();
+    }
+    // Labels last and short (two lines), so neighbouring districts never overlap.
+    for (const d of DISTRICTS) {
+      const v = S.districtStanding[d.name];
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px system-ui';
+      ctx.fillText(d.short, mx(d.x0) + 8, mz(d.z0) + 18);
+      ctx.fillStyle = '#cfd8e8';
+      ctx.font = '11px system-ui';
+      ctx.fillText(`${standingLabel(v)} · ${Math.round(v)}`, mx(d.x0) + 8, mz(d.z0) + 34);
     }
     // Mission markers + player.
     const st = Missions.currentStage();
