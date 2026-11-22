@@ -493,7 +493,15 @@ const Game = {
       p.x = p.inCar.x; p.z = p.inCar.z; p.yaw = p.inCar.yaw; p.speed = p.inCar.speed;
       S.distanceKm += Math.abs(p.inCar.speed) * dt / 1000;
       AudioSys.setEngine(Math.abs(p.inCar.speed) / 34);
-      if (Input.hit('KeyE')) Game.exitCar();
+      // E in a car interacts first (taxi stand, gun shop, respray, export,
+      // package) and only exits the car when there is nothing to use —
+      // otherwise a fare could never be started from the driver's seat.
+      const itCar = Game.nearestInteract();
+      HUD.prompt(itCar ? itCar.label : null);
+      if (Input.hit('KeyE')) {
+        if (itCar && itCar.kind !== 'car') Game.doInteract(itCar);
+        else Game.exitCar();
+      }
       // exitCar() above can clear inCar in this same frame — re-check.
       if (p.inCar && p.inCar.hp <= 0) Game.carWrecked();
     } else {
@@ -523,13 +531,6 @@ const Game = {
       // Shooting.
       if (Input.mouseDown || Input.mousePressed) Combat.fire(Game.scene, Game.camera);
       // Interact.
-      const it = Game.nearestInteract();
-      HUD.prompt(it ? it.label : null);
-      if (it && Input.hit('KeyE')) Game.doInteract(it);
-    }
-
-    // Car-mode interact prompt (shops etc. while driving).
-    if (p.inCar) {
       const it = Game.nearestInteract();
       HUD.prompt(it ? it.label : null);
       if (it && Input.hit('KeyE')) Game.doInteract(it);
