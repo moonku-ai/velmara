@@ -1,29 +1,44 @@
-/* input.js — keyboard + mouse state. Held keys steer; one-shot presses are queued once. */
-VEL.Input = {
-  keys: {}, pressed: {}, mouseX: 0, mouseY: 0, mouseDown: false, mouseClicked: false,
-  init(canvas) {
-    addEventListener('keydown', (e) => {
-      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
-      if (!this.keys[e.code]) this.pressed[e.code] = true;
-      this.keys[e.code] = true;
+// Keyboard + mouse input. Keys are tracked as a held set plus an edge set
+// (pressed this frame). G.press() in the debug hooks feeds the same sets,
+// so automated playtests drive the exact code path a player does.
+const Input = {
+  keys: new Set(),
+  pressed: new Set(),
+  mouseDX: 0, mouseDY: 0, mouseDown: false, mousePressed: false,
+  locked: false,
+
+  bind(canvas) {
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      Input.keys.add(e.code);
+      Input.pressed.add(e.code);
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
     });
-    addEventListener('keyup', (e) => { this.keys[e.code] = false; });
-    addEventListener('blur', () => { this.keys = {}; });
-    canvas.addEventListener('mousemove', (e) => { this.mouseX = e.clientX; this.mouseY = e.clientY; });
-    canvas.addEventListener('mousedown', (e) => { if (e.button === 0) { this.mouseDown = true; this.mouseClicked = true; } });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('keyup', (e) => { Input.keys.delete(e.code); });
+    window.addEventListener('blur', () => { Input.keys.clear(); });
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) { Input.mouseDown = true; Input.mousePressed = true; }
+      if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+    });
+    window.addEventListener('mouseup', (e) => { if (e.button === 0) Input.mouseDown = false; });
+    document.addEventListener('pointerlockchange', () => {
+      Input.locked = document.pointerLockElement === canvas;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (Input.locked) { Input.mouseDX += e.movementX; Input.mouseDY += e.movementY; }
+    });
   },
-  down(code) { return !!this.keys[code]; },
-  hit(code) { const v = !!this.pressed[code]; if (v) this.pressed[code] = false; return v; },
-  consumeClick() { const v = this.mouseClicked; this.mouseClicked = false; return v; },
-  endFrame() { this.pressed = {}; this.mouseClicked = false; },
-  axis() {
-    let x = 0, y = 0;
-    if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
-    if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
-    if (this.down('KeyW') || this.down('ArrowUp')) y -= 1;
-    if (this.down('KeyS') || this.down('ArrowDown')) y += 1;
-    return { x, y };
+
+  down(code) { return Input.keys.has(code); },
+  hit(code) { return Input.pressed.has(code); },
+  // WASD or arrows, as -1/0/1.
+  moveAxis() {
+    const f = (Input.down('KeyW') || Input.down('ArrowUp') ? 1 : 0) - (Input.down('KeyS') || Input.down('ArrowDown') ? 1 : 0);
+    const s = (Input.down('KeyD') || Input.down('ArrowRight') ? 1 : 0) - (Input.down('KeyA') || Input.down('ArrowLeft') ? 1 : 0);
+    return { f, s };
+  },
+  endFrame() {
+    Input.pressed.clear();
+    Input.mouseDX = 0; Input.mouseDY = 0; Input.mousePressed = false;
   },
 };

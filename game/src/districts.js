@@ -1,27 +1,24 @@
-/* districts.js — 5 districts, standing 0-100, WARY/NEUTRAL/FRIENDLY, price + help effects. */
-VEL.Districts = {
-  list: [],
-  init() {
-    this.list = VEL.CFG.districts.map((d) => ({ ...d }));
+// District standing: five neighbourhoods, each 0–100. Standing rises when
+// you finish work in a district and shapes prices and how the locals treat
+// you. The HUD shows the district you are standing in, right now.
+const Districts = {
+  at(x, z) {
+    for (const d of DISTRICTS) {
+      if (x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1) return d;
+    }
+    return DISTRICTS[0];
   },
-  status(v) { return v >= 70 ? 'FRIENDLY' : v >= 40 ? 'NEUTRAL' : 'WARY'; },
-  current(x, z) {
-    let best = this.list[0], bd = 1e9;
-    for (const d of this.list) { const dd = Math.hypot(d.cx - x, d.cz - z); if (dd < bd) { bd = dd; best = d; } }
-    return best;
+
+  addStanding(name, n) {
+    const cur = S.districtStanding[name] ?? 50;
+    const next = Math.max(0, Math.min(100, cur + n));
+    S.districtStanding[name] = next;
+    if (next >= 70 && cur < 70) HUD.toast(`${name.toUpperCase()} is now FRIENDLY — locals will look the other way.`);
+    return next;
   },
-  bump(id, n) {
-    const d = this.list.find((x) => x.id === id);
-    if (!d) return;
-    const before = this.status(d.standing);
-    d.standing = Math.max(0, Math.min(100, d.standing + n));
-    const after = this.status(d.standing);
-    if (after !== before) VEL.HUD.toast(d.name + ' is now ' + after + ' (' + d.standing + ')');
-    else VEL.HUD.toast(d.name + ' standing ' + d.standing);
+
+  // Gun shop discount in friendly districts.
+  discount(name) {
+    return (S.districtStanding[name] ?? 50) >= 70 ? 0.75 : 1;
   },
-  priceFactor(x, z) {
-    const d = this.current(x, z);
-    return this.status(d.standing) === 'FRIENDLY' ? 0.8 : this.status(d.standing) === 'WARY' ? 1.2 : 1;
-  },
-  friendlyCount() { return this.list.filter((d) => this.status(d.standing) === 'FRIENDLY').length; },
 };

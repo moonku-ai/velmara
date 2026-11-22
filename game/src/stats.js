@@ -1,71 +1,107 @@
-/* stats.js — career stats, completion %, checklist, medals, big map render (Tab screen). */
-VEL.Stats = {
-  completion() {
-    const S = VEL.State;
-    let got = 0, total = 0;
-    total += 6; got += Object.keys(VEL.Missions.done).length;
-    total += 4; got += Object.keys(VEL.Races.done).length;
-    total += 10; got += S.packagesGot.length;
-    total += 5; got += S.stuntsDone.length;
-    total += 5; got += VEL.Districts.friendlyCount();
-    total += 3; got += Math.min(3, S.exportsDone);
-    total += 1; got += S.storyComplete ? 1 : 0;
-    return Math.round((got / total) * 1000) / 10;
+// Stats screen (Tab): big district map with standing, completion %,
+// checklist, mission medals, career stats and the three save slots.
+const Stats = {
+  open: false,
+
+  toggle() {
+    Stats.open = !Stats.open;
+    const el = HUD.el['stats-screen'];
+    if (!el) return;
+    if (Stats.open) {
+      S.mode = 'stats';
+      Stats.render();
+      el.classList.add('show');
+    } else {
+      S.mode = 'playing';
+      el.classList.remove('show');
+    }
   },
+
+  close() {
+    Stats.open = false;
+    HUD.el['stats-screen']?.classList.remove('show');
+    if (S.mode === 'stats') S.mode = 'playing';
+  },
+
   render() {
-    const S = VEL.State;
-    document.getElementById('stats-complete').textContent = this.completion() + '% COMPLETE';
-    // big map
-    const cv = document.getElementById('bigmap'), ctx = cv.getContext('2d');
-    const H = VEL.CFG.half, W = cv.width, scale = W / (H * 2 + 40);
-    const mx = (x) => (x + H + 20) * scale, mz = (z) => (z + H + 20) * scale;
-    ctx.fillStyle = '#0b0e1e'; ctx.fillRect(0, 0, W, W);
-    ctx.fillStyle = '#0a2e4a'; ctx.fillRect(0, 0, W, 8);
-    ctx.fillStyle = '#1a2a4a'; ctx.fillRect(mx(-H), mz(-H), H * 2 * scale, H * 2 * scale);
-    ctx.strokeStyle = '#2c3a6e';
-    for (let i = -5; i <= 5; i++) {
-      ctx.beginPath(); ctx.moveTo(mx(i * 42), mz(-H)); ctx.lineTo(mx(i * 42), mz(H)); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(mx(-H), mz(i * 42)); ctx.lineTo(mx(H), mz(i * 42)); ctx.stroke();
+    const body = HUD.el['stats-body'];
+    if (!body) return;
+    const pct = completionPct();
+    const friendly = DISTRICTS.filter((d) => S.districtStanding[d.name] >= 70).length;
+    const rows = [];
+    rows.push(`<div class="stats-title">RHEA SOLANO — ${rankFor(S.rp).name.toUpperCase()} · ${S.rp} RP</div>`);
+    rows.push(`<div class="stats-big">${pct.toFixed(1)}% COMPLETE</div>`);
+    rows.push('<div class="stats-sec">CHECKLIST</div>');
+    const check = (label, done, total) => `<div class="stats-row"><span>${label}</span><span>${done}/${total}</span></div>`;
+    rows.push(check('Story missions', S.missionsDone, 6));
+    rows.push(check('Street races', S.racesDone, 4));
+    rows.push(check('Hidden packages', S.packages, 10));
+    rows.push(check('Stunt jumps', S.stunts, 5));
+    rows.push(check('Taxi fares', S.fares, 3));
+    rows.push(check('Car exports', S.exports, 3));
+    rows.push(check('Districts FRIENDLY', friendly, 5));
+    rows.push(check('Crew recruited', 3, 3));
+    rows.push('<div class="stats-sec">MISSION RATINGS</div>');
+    for (const m of MISSIONS) {
+      const med = S.missionRatings[m.id];
+      rows.push(`<div class="stats-row"><span>M${m.id} · ${m.title}</span><span class="medal-${med || 'none'}">${med ? (med === 'G' ? '★ GOLD' : med === 'S' ? '★ SILVER' : '★ BRONZE') : '— not done —'}</span></div>`);
     }
-    ctx.fillStyle = '#0e5a6e'; ctx.fillRect(mx(-118), mz(-H), 26 * scale, H * 2 * scale);
-    for (const d of VEL.Districts.list) {
-      ctx.fillStyle = d.color + '33'; ctx.beginPath(); ctx.arc(mx(d.cx), mz(d.cz), d.r * scale, 0, 7); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(d.name, mx(d.cx), mz(d.cz));
-      ctx.fillStyle = d.color; ctx.fillText(VEL.Districts.status(d.standing) + ' · ' + d.standing, mx(d.cx), mz(d.cz) + 14);
+    rows.push('<div class="stats-sec">CAREER</div>');
+    const acc = S.stats.shots ? Math.round((S.stats.hits / S.stats.shots) * 100) : 0;
+    rows.push(check('Cash', '$' + Math.floor(S.cash).toLocaleString(), ''));
+    rows.push(check('Cars stolen', S.carsStolen, ''));
+    rows.push(check('People taken out', S.kills, ''));
+    rows.push(check('Cops escaped', S.copsEscaped, ''));
+    rows.push(check('Distance driven', S.distanceKm.toFixed(1) + ' km', ''));
+    rows.push(check('Shot accuracy', acc + '%', ''));
+    rows.push(check('Play time', Math.floor(S.time / 60) + 'm ' + Math.floor(S.time % 60) + 's', ''));
+    rows.push('<div class="stats-sec">DISTRICT STANDING</div>');
+    for (const d of DISTRICTS) {
+      const v = Math.round(S.districtStanding[d.name]);
+      rows.push(`<div class="stats-row"><span style="color:${d.color}">${d.name}</span><span>${standingLabel(v)} · ${v}</span></div>`);
     }
-    ctx.fillStyle = '#37e08a'; ctx.beginPath(); ctx.arc(mx(S.player.x), mz(S.player.z), 6, 0, 7); ctx.fill();
-    // district list
-    document.getElementById('district-list').innerHTML = VEL.Districts.list.map((d) =>
-      '<div class="drow"><span>' + d.name + '</span><span>' + VEL.Districts.status(d.standing) + ' · ' + d.standing + '</span></div>').join('');
-    // checklist
-    const rows = [
-      ['Story missions', Object.keys(VEL.Missions.done).length + '/6'],
-      ['Street races', Object.keys(VEL.Races.done).length + '/4'],
-      ['Stunt jumps', S.stuntsDone.length + '/5'],
-      ['Hidden packages', S.packagesGot.length + '/10'],
-      ['Exports delivered', S.exportsDone + '/3'],
-      ['Districts FRIENDLY', VEL.Districts.friendlyCount() + '/5'],
-      ['Crew abilities', '3/3'],
-      ['Taxi fares', S.stats.taxiFares + '/3'],
-    ];
-    document.getElementById('checklist').innerHTML = rows.map((r) => '<div class="crow"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
-    // medals
-    document.getElementById('medals').innerHTML = VEL.CFG.missions.map((m) =>
-      '<div class="mrow"><span>M' + m.id + ' · ' + m.name + '</span><span>' + (VEL.Missions.medals[m.id] ? '★ ' + VEL.Missions.medals[m.id] : '— not done') + '</span></div>').join('');
-    // career stats
-    const st = S.stats;
-    const career = [
-      ['Cars stolen', st.carsStolen], ['Cops escaped', st.copsEscaped], ['People taken out', st.takenOut],
-      ['Shots fired / hit', st.shotsFired + ' / ' + st.shotsHit], ['Distance driven', (st.distanceDriven / 1000).toFixed(1) + ' km'],
-      ['Cash earned', '$' + st.cashEarned], ['Crew abilities used', st.crewUses], ['Missions done', st.missionsDone],
-      ['Races won', st.racesWon], ['Time on the island', Math.floor(S.time / 60) + 'm ' + Math.floor(S.time % 60) + 's'],
-    ];
-    document.getElementById('career').innerHTML = career.map((r) => '<div class="srow"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
-    // save slots
-    document.getElementById('save-slots').innerHTML = [1, 2, 3].map((s) => '<div class="slot">' + VEL.Save.slotInfo(s) + '</div>').join('');
-    // title saves line
-    const ts = document.getElementById('title-saves');
-    if (ts) ts.textContent = [1, 2, 3].map((s) => VEL.Save.slotInfo(s)).join('  ·  ');
+    rows.push('<div class="stats-sec">SAVE SLOTS</div>');
+    for (let s = 1; s <= 3; s++) {
+      const info = SaveSys.slotInfo(s);
+      rows.push(`<div class="stats-row"><span>Slot ${s}</span><span>${info ? `$${Math.floor(info.cash).toLocaleString()} · ${info.missions}/6 missions` : 'empty'}</span></div>`);
+    }
+    body.innerHTML = rows.join('');
+    Stats.drawBigMap();
+  },
+
+  drawBigMap() {
+    const cv = HUD.el.bigmap;
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height, half = CFG.world.half;
+    const mx = (x) => ((x + half) / (half * 2)) * W;
+    const mz = (z) => ((z + half) / (half * 2)) * H;
+    ctx.fillStyle = '#0d1526';
+    ctx.fillRect(0, 0, W, H);
+    for (const d of DISTRICTS) {
+      const v = S.districtStanding[d.name];
+      ctx.fillStyle = d.color + (v >= 70 ? '55' : v >= 40 ? '33' : '18');
+      ctx.fillRect(mx(d.x0), mz(d.z0), (d.x1 - d.x0) / (half * 2) * W, (d.z1 - d.z0) / (half * 2) * H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px system-ui';
+      ctx.fillText(`${d.name.toUpperCase()} · ${standingLabel(v)} ${Math.round(v)}`, mx(d.x0) + 8, mz(d.z0) + 20);
+    }
+    ctx.fillStyle = '#0e3a4a';
+    ctx.fillRect(mx(CFG.canal.x0), mz(CFG.canal.z0), (CFG.canal.x1 - CFG.canal.x0) / (half * 2) * W, (CFG.canal.z1 - CFG.canal.z0) / (half * 2) * H);
+    ctx.strokeStyle = '#3a4358';
+    for (const r of CFG.roads) {
+      ctx.beginPath(); ctx.moveTo(mx(r), 0); ctx.lineTo(mx(r), H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, mz(r)); ctx.lineTo(W, mz(r)); ctx.stroke();
+    }
+    // Mission markers + player.
+    const st = Missions.currentStage();
+    if (S.mission && st && st.x !== undefined) {
+      ctx.fillStyle = '#ffc94d';
+      ctx.beginPath(); ctx.arc(mx(st.x), mz(st.z), 7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(mx(S.player.x), mz(S.player.z), 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.beginPath(); ctx.arc(mx(S.player.x), mz(S.player.z), 8, 0, Math.PI * 2); ctx.stroke();
   },
 };

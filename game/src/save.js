@@ -1,57 +1,69 @@
-/* save.js — 3 localStorage slots + autosave. Stores cash, RP, missions, medals, districts, stats. */
-VEL.Save = {
+// Save / load: three localStorage slots. A slot stores cash, RP, progress,
+// standing and the player position — enough to pick up exactly where the
+// player left off.
+const SaveSys = {
   key(slot) { return 'velmara_save_' + slot; },
-  collect() {
-    const S = VEL.State;
+
+  snapshot() {
     return {
-      v: 1, cash: S.cash, rp: S.rp, hp: S.hp, armour: S.armour,
-      player: { x: S.player.x, z: S.player.z, heading: S.player.heading },
-      missionsDone: Object.keys(VEL.Missions.done).map(Number),
-      medals: VEL.Missions.medals,
-      racesDone: Object.keys(VEL.Races.done), raceBest: VEL.Races.best,
-      districts: VEL.Districts.list.map((d) => ({ id: d.id, standing: d.standing })),
-      packagesGot: S.packagesGot, stuntsDone: S.stuntsDone, exportsDone: S.exportsDone,
-      stats: S.stats, time: S.time, nextMission: S.nextMission || 1,
+      v: 1, cash: S.cash, rp: S.rp, hp: S.hp, armor: S.armor,
+      ammo: S.ammo.slice(), weapon: S.weapon,
+      missionsDone: S.missionsDone, missionRatings: { ...S.missionRatings },
+      racesDone: S.racesDone, raceWins: { ...S.raceWins },
+      packages: S.packages, packagesFound: { ...S.packagesFound },
+      stunts: S.stunts, stuntsDone: { ...S.stuntsDone },
+      fares: S.fares, exports: S.exports, kills: S.kills,
+      carsStolen: S.carsStolen, distanceKm: S.distanceKm, copsEscaped: S.copsEscaped,
+      districtStanding: { ...S.districtStanding },
+      player: { x: S.player.x, z: S.player.z, yaw: S.player.yaw },
+      time: S.time, savedAt: new Date().toISOString(),
     };
   },
-  apply(data) {
-    const S = VEL.State;
-    if (!data) return false;
-    S.cash = data.cash; S.rp = data.rp; S.hp = data.hp; S.armour = data.armour || 0;
-    S.player.x = data.player.x; S.player.z = data.player.z; S.player.heading = data.player.heading;
-    VEL.Missions.done = {}; for (const id of data.missionsDone || []) VEL.Missions.done[id] = true;
-    VEL.Missions.medals = data.medals || {};
-    VEL.Races.done = {}; for (const id of data.racesDone || []) VEL.Races.done[id] = true;
-    VEL.Races.best = data.raceBest || {};
-    for (const d of data.districts || []) { const cur = VEL.Districts.list.find((x) => x.id === d.id); if (cur) cur.standing = d.standing; }
-    S.packagesGot = data.packagesGot || []; S.stuntsDone = data.stuntsDone || []; S.exportsDone = data.exportsDone || 0;
-    S.stats = Object.assign(S.stats, data.stats || {});
-    S.time = data.time || 0; S.nextMission = data.nextMission || 1;
-    return true;
-  },
+
   save(slot) {
     try {
-      localStorage.setItem(this.key(slot), JSON.stringify(this.collect()));
-      VEL.HUD.toast('SAVED TO SLOT ' + slot);
+      localStorage.setItem(SaveSys.key(slot), JSON.stringify(SaveSys.snapshot()));
+      HUD.toast(`Saved to slot ${slot}.`);
       return true;
-    } catch (e) { VEL.HUD.toast('SAVE FAILED'); return false; }
+    } catch (e) {
+      HUD.toast('Save failed — storage unavailable.');
+      return false;
+    }
   },
+
   load(slot) {
     try {
-      const raw = localStorage.getItem(this.key(slot));
-      if (!raw) { VEL.HUD.toast('SLOT ' + slot + ' IS EMPTY'); return false; }
-      const ok = this.apply(JSON.parse(raw));
-      if (ok) VEL.HUD.toast('LOADED SLOT ' + slot + ' · $' + VEL.State.cash + ' · ' + Object.keys(VEL.Missions.done).length + ' missions done');
-      return ok;
-    } catch (e) { VEL.HUD.toast('LOAD FAILED'); return false; }
+      const raw = localStorage.getItem(SaveSys.key(slot));
+      if (!raw) { HUD.toast(`Slot ${slot} is empty.`); return false; }
+      const d = JSON.parse(raw);
+      S.cash = d.cash; S.rp = d.rp; S.hp = d.hp; S.armor = d.armor;
+      S.ammo = d.ammo.slice(); S.weapon = d.weapon;
+      S.missionsDone = d.missionsDone; S.missionRatings = d.missionRatings;
+      S.racesDone = d.racesDone; S.raceWins = d.raceWins;
+      S.packages = d.packages; S.packagesFound = d.packagesFound;
+      S.stunts = d.stunts; S.stuntsDone = d.stuntsDone;
+      S.fares = d.fares; S.exports = d.exports; S.kills = d.kills;
+      S.carsStolen = d.carsStolen; S.distanceKm = d.distanceKm; S.copsEscaped = d.copsEscaped;
+      S.districtStanding = d.districtStanding;
+      S.player.x = d.player.x; S.player.z = d.player.z; S.player.yaw = d.player.yaw;
+      S.time = d.time || 0;
+      S.wanted = 0;
+      Missions.abort(); Races.abort();
+      Game.teleportPlayer(d.player.x, d.player.z);
+      HUD.toast(`Loaded slot ${slot} — welcome back, Rhea.`);
+      return true;
+    } catch (e) {
+      HUD.toast('Load failed — save is corrupt.');
+      return false;
+    }
   },
+
   slotInfo(slot) {
     try {
-      const raw = localStorage.getItem(this.key(slot));
-      if (!raw) return 'SLOT ' + slot + ' — EMPTY';
+      const raw = localStorage.getItem(SaveSys.key(slot));
+      if (!raw) return null;
       const d = JSON.parse(raw);
-      return 'SLOT ' + slot + ' — $' + d.cash + ' · ' + (d.missionsDone || []).length + '/6 missions · ' + d.rp + ' RP';
-    } catch (e) { return 'SLOT ' + slot + ' — CORRUPT'; }
+      return { cash: d.cash, missions: d.missionsDone, time: d.time || 0, savedAt: d.savedAt };
+    } catch (e) { return null; }
   },
-  autosave() { this.save(1); },
 };

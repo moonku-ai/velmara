@@ -1,77 +1,73 @@
-/* races.js — 4 street races: checkpoint gates, timer, best times, prize + RP. */
-VEL.Races = {
-  active: null, best: {}, done: {}, gateMeshes: [],
-  start(raceId) {
-    const def = VEL.CFG.races.find((r) => r.id === raceId);
-    if (!def || this.active) return;
-    this.active = { def, cp: 0, t: 0 };
-    VEL.State.race = def;
-    VEL.HUD.toast('RACE STARTED · ' + def.name + ' — hit every gold gate!');
-    VEL.HUD.setMission({ id: 0, name: def.name, stages: def.cps }, 0);
-    this.buildGates(def);
-    this.updateGate();
-    VEL.Audio.pickup();
+// Street races: checkpoint chains on the road grid with a timer.
+// Start one from the race board (or the R key at a race start line).
+// Drive through each glowing ring in order; beat par for a gold medal.
+const Races = {
+  marker: null, startLine: null,
+
+  start(id) {
+    const def = RACES.find((r) => r.id === id);
+    if (!def || S.race || !S.player.inCar) return false;
+    S.race = { def, cp: 0, timer: 0 };
+    HUD.banner(`STREET RACE · ${def.name.toUpperCase()}`, 'CHECKPOINT 1/' + def.points.length, 'Hit every ring in order. Beat the par time for gold.');
+    Races.placeMarker();
+    AudioSys.mission();
+    return true;
   },
-  buildGates(def) {
-    this.clearGates();
-    for (const [x, z] of def.cps) {
-      const gate = new THREE.Group();
-      const mat = new THREE.MeshBasicMaterial({ color: 0xffd24d, transparent: true, opacity: 0.85 });
-      for (const s of [-1, 1]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 6, 8), mat);
-        post.position.set(s * 5, 3, 0); gate.add(post);
-      }
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.5, 0.5), mat);
-      bar.position.y = 6; gate.add(bar);
-      gate.position.set(x, 0, z);
-      VEL.Game.scene.add(gate);
-      this.gateMeshes.push(gate);
-    }
+
+  placeMarker() {
+    const scene = City.scene;
+    if (Races.marker && Races.marker.parent) Races.marker.parent.remove(Races.marker);
+    const r = S.race;
+    if (!scene || !r) return;
+    const [x, z] = r.def.points[r.cp];
+    Races.marker = City.makeMarker(0x37e0c8);
+    Races.marker.position.set(x, 0, z);
+    scene.add(Races.marker);
   },
-  clearGates() { for (const g of this.gateMeshes) VEL.Game.scene.remove(g); this.gateMeshes = []; },
-  updateGate() {
-    const a = this.active; if (!a) return;
-    const [x, z] = a.def.cps[a.cp];
-    VEL.City.setMarker(x, z, true);
-    VEL.HUD.setObjective('RACE · ' + a.def.name + ' — GATE ' + (a.cp + 1) + '/' + a.def.cps.length + ' · ' + a.t.toFixed(1) + 's');
+
+  clearMarker() {
+    if (Races.marker && Races.marker.parent) Races.marker.parent.remove(Races.marker);
+    Races.marker = null;
   },
+
   update(dt) {
-    const a = this.active; if (!a) return;
-    a.t += dt;
-    const S = VEL.State;
-    const [x, z] = a.def.cps[a.cp];
-    const d = Math.hypot(x - S.player.x, z - S.player.z);
+    const r = S.race;
+    if (!r) return;
+    r.timer += dt;
+    const [x, z] = r.def.points[r.cp];
+    const p = S.player;
+    const d = Math.hypot(p.x - x, p.z - z);
+    HUD.objective(`RACE ${r.def.name} — checkpoint ${r.cp + 1}/${r.def.points.length} · ${r.timer.toFixed(1)}s · ${Math.round(d)}m`);
     if (d < 7) {
-      VEL.Audio.pickup();
-      a.cp++;
-      if (a.cp >= a.def.cps.length) this.finish();
-      else this.updateGate();
+      AudioSys.pickup();
+      r.cp++;
+      if (r.cp >= r.def.points.length) { Races.finish(); return; }
+      HUD.banner(`STREET RACE · ${r.def.name.toUpperCase()}`, `CHECKPOINT ${r.cp + 1}/${r.def.points.length}`, `${r.timer.toFixed(1)}s — keep it pinned.`);
+      Races.placeMarker();
     }
-    if (a.t > 240) { VEL.HUD.toast('RACE FAILED — TOO SLOW'); this.abort(); }
+    if (Races.marker) {
+      const s = 1 + Math.sin(S.time * 4) * 0.1;
+      Races.marker.scale.set(s, 1, s);
+    }
   },
+
   finish() {
-    const a = this.active; if (!a) return;
-    const S = VEL.State;
-    const prev = this.best[a.def.id];
-    const isBest = !prev || a.t < prev;
-    if (isBest) this.best[a.def.id] = a.t;
-    this.done[a.def.id] = true;
-    S.cash += a.def.prize; S.rp += a.def.rp; S.stats.racesWon++; S.stats.cashEarned += a.def.prize;
-    VEL.HUD.toast('RACE WON · ' + a.def.name + ' · ' + a.t.toFixed(1) + 's' + (isBest ? ' · NEW BEST!' : '') + ' · +$' + a.def.prize);
-    VEL.Audio.missionPass(); VEL.Audio.cash();
-    VEL.City.setMarker(0, 0, false);
-    this.clearGates();
-    this.active = null; S.race = null;
-    VEL.Save.autosave();
+    const r = S.race;
+    if (!r) return;
+    const medal = r.timer <= r.def.par ? 'G' : r.timer <= r.def.par * 1.3 ? 'S' : 'B';
+    S.cash += r.def.reward;
+    S.rp += r.def.rp;
+    S.racesDone++;
+    S.raceWins[r.def.id] = medal;
+    HUD.toast(`RACE WON — ${r.def.name} in ${r.timer.toFixed(1)}s  +$${r.def.reward}  +${r.def.rp} RP  [${medal}]`);
+    AudioSys.mission();
+    Races.clearMarker();
+    S.race = null;
+    Game.refreshMissionBoard();
   },
-  abort() { this.clearGates(); this.active = null; VEL.State.race = null; VEL.City.setMarker(0, 0, false); },
-  nearestRaceStart(x, z) {
-    let best = null, bd = 12;
-    for (const r of VEL.CFG.races) {
-      const [sx, sz] = r.cps[0];
-      const d = Math.hypot(sx - x, sz - z);
-      if (d < bd) { bd = d; best = r; }
-    }
-    return best;
+
+  abort() {
+    Races.clearMarker();
+    S.race = null;
   },
 };

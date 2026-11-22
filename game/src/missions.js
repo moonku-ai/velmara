@@ -1,109 +1,180 @@
-/* missions.js — 6 story missions, staged objectives, medals, dialog, rewards, RP. */
-VEL.Missions = {
-  active: null, currentId: 0, done: {}, medals: {}, stageIdx: 0, stageT: 0, tailT: 0, evadeT: 0,
+// Story missions: a data-driven stage machine over MISSIONS in config.js.
+// Each stage completes through the same code path the player uses — walk
+// to a marker, steal a car, kill the counted enemies, tail a courier.
+// Rewards land on completion; a medal (G/S/B) rates time + damage taken.
+const Missions = {
+  marker: null, tailCar: null, targetCar: null,
+
+  available() { return MISSIONS.filter((m) => !S.missionRatings[m.id]); },
+
   start(id) {
-    const def = VEL.CFG.missions.find((m) => m.id === id);
-    if (!def) return;
-    this.currentId = id; this.stageIdx = 0; this.stageT = 0;
-    const S = VEL.State;
-    S.mission = def; S.missionStart = S.time; S.damageTaken = 0; S.killsThisMission = 0;
-    this.active = { id: def.id, def, stage: def.stages[0], kills: 0, startTime: S.time };
-    VEL.HUD.dialog(def.intro[0], def.intro[1]);
-    VEL.HUD.toast('MISSION ' + id + ' · ' + def.name + ' STARTED');
-    this.enterStage(0);
+    const def = MISSIONS.find((m) => m.id === id);
+    if (!def) return false;
+    if (S.mission) return false;
+    S.mission = { def, stage: 0, kills: 0, timer: 0, damageTaken: 0, startedAt: S.time };
+    S.killsThisMission = 0;
+    Missions.showStage();
+    HUD.dialog(def.giver, def.brief);
+    AudioSys.mission();
+    Game.spawnMissionCar(def);
+    return true;
   },
-  enterStage(i) {
-    const S = VEL.State, a = this.active;
-    if (!a) return;
-    a.stage = a.def.stages[i]; this.stageIdx = i; this.stageT = 0; this.tailT = 0; this.evadeT = 0;
-    const st = a.stage;
-    VEL.HUD.setMission(a.def, i);
-    VEL.City.setMarker(st.pos ? st.pos[0] : 0, st.pos ? st.pos[1] : 0, !!st.pos);
-    VEL.HUD.setObjective(st.text + ' — ' + st.hint);
-    // stage setup
-    if (a.def.id === 1 && i === 0) VEL.Game.spawnMissionCar(21, 84, 0xffb347, 'GETAWAY COUPE');
-    if (a.def.id === 2 && i === 1) for (let k = 0; k < 4; k++) VEL.People.spawnEnemy(-84 + (k % 2) * 14 - 7, 21 + Math.floor(k / 2) * 14 - 7, { name: 'MARKET SHOOTER' });
-    if (a.def.id === 3 && i === 0) VEL.Game.spawnMissionCar(0, -105, 0x2a6bff, 'VPD TRUCK', true);
-    if (a.def.id === 3 && i === 1) VEL.Police.setWanted(3);
-    if (a.def.id === 4 && i === 0) VEL.People.spawnTailTarget(105, 21);
-    if (a.def.id === 5 && i === 1) { for (let k = 0; k < 6; k++) VEL.People.spawnEnemy(42 + (k % 3) * 10 - 10, -105 + Math.floor(k / 3) * 12 - 6, { guard: true, name: 'VAULT GUARD' }); VEL.Police.setWanted(4); }
-    if (a.def.id === 6 && i === 1) { for (let k = 0; k < 8; k++) VEL.People.spawnEnemy((k % 4) * 10 - 15, 84 + Math.floor(k / 4) * 12 - 6, { guard: true, name: 'CASINO GUARD' }); }
-    if (a.def.id === 6 && i === 2) VEL.Police.setWanted(5);
-    if (a.def.id === 5 && i === 0) VEL.Police.setWanted(2);
+
+  currentStage() {
+    if (!S.mission) return null;
+    return S.mission.def.stages[S.mission.stage];
   },
-  nextStage() {
-    const a = this.active;
-    if (!a) return;
-    VEL.Audio.pickup();
-    if (this.stageIdx + 1 >= a.def.stages.length) this.complete();
-    else this.enterStage(this.stageIdx + 1);
+
+  showStage() {
+    const st = Missions.currentStage();
+    const m = S.mission;
+    if (!st || !m) return;
+    HUD.banner(`MISSION ${m.def.id} · ${m.def.title.toUpperCase()}`, `STAGE ${m.stage + 1}/${m.def.stages.length} — ${st.title}`, st.text);
+    Missions.placeMarker(st);
   },
-  update(dt) {
-    const S = VEL.State, a = this.active;
-    if (!a) return;
-    const st = a.stage;
-    this.stageT += dt;
-    const p = S.player;
-    const dist = st.pos ? Math.hypot(st.pos[0] - p.x, st.pos[1] - p.z) : 999;
-    if (st.type === 'goto' && dist < 7) this.nextStage();
-    else if (st.type === 'steal' && S.inCar && S.car && S.car.mission) this.nextStage();
-    else if (st.type === 'kill' && S.killsThisMission >= st.count) this.nextStage();
-    else if (st.type === 'chase' && dist < 9 && S.wanted >= 3) this.nextStage();
-    else if (st.type === 'tail') {
-      const tt = VEL.People.tailTarget;
-      if (tt) {
-        const d = Math.hypot(tt.x - p.x, tt.z - p.z);
-        if (d < 10) { VEL.HUD.setObjective('TOO CLOSE — BACK OFF!'); this.tailT = Math.max(0, this.tailT - dt * 2); }
-        else if (d > 46) { VEL.HUD.setObjective('TOO FAR — CATCH UP!'); this.tailT = Math.max(0, this.tailT - dt); }
-        else { this.tailT += dt; VEL.HUD.setObjective('TAIL THE FIXER — ' + Math.ceil(st.dur - this.tailT) + 's (' + Math.round(d) + 'm)'); }
-        if (this.tailT >= st.dur) this.nextStage();
-      }
-    } else if (st.type === 'evade') {
-      if (S.wanted === 0) this.nextStage();
-      else { this.evadeT += dt; VEL.HUD.setObjective('LOSE THE HEAT — wanted ' + S.wanted + ' · ' + Math.ceil(40 - this.evadeT) + 's'); if (this.evadeT > 40) { VEL.Police.setWanted(0); this.nextStage(); } }
+
+  placeMarker(st) {
+    const scene = City.scene;
+    if (Missions.marker && Missions.marker.parent) Missions.marker.parent.remove(Missions.marker);
+    Missions.marker = null;
+    if (!scene || !st || st.x === undefined) return;
+    Missions.marker = City.makeMarker(0xffc94d);
+    Missions.marker.position.set(st.x, 0, st.z);
+    scene.add(Missions.marker);
+  },
+
+  clearMarker() {
+    if (Missions.marker && Missions.marker.parent) Missions.marker.parent.remove(Missions.marker);
+    Missions.marker = null;
+  },
+
+  advance() {
+    const m = S.mission;
+    if (!m) return;
+    m.stage++;
+    S.killsThisMission = 0;
+    if (m.stage >= m.def.stages.length) { Missions.complete(); return; }
+    const st = Missions.currentStage();
+    if (st.type === 'kill') Missions.spawnStageEnemies(st);
+    if (st.type === 'tail') Missions.spawnTailTarget(st);
+    if (st.type === 'escape') Police.setWanted(st.wanted || 4);
+    Missions.showStage();
+    AudioSys.pickup();
+  },
+
+  spawnStageEnemies(st) {
+    const scene = City.scene;
+    People.clearEnemies(scene);
+    const names = ['V. Kroll', 'D. Marek', 'S. Ivers', 'T. Bane', 'R. Kade', 'J. Fenn', 'M. Ostr', 'L. Vane'];
+    for (let i = 0; i < st.count; i++) {
+      const a = (i / st.count) * Math.PI * 2;
+      const x = st.x + Math.sin(a) * (8 + (i % 3) * 4);
+      const z = st.z + Math.cos(a) * (8 + (i % 3) * 4);
+      People.spawnEnemy(scene, x, z, names[i % names.length], 60);
     }
-    // mission progress bar = stage fraction
-    const frac = (this.stageIdx + 0.5) / a.def.stages.length;
-    VEL.HUD.setMissionProgress(frac);
   },
+
+  spawnTailTarget(st) {
+    const scene = City.scene;
+    if (Missions.tailCar) Vehicles.remove(Missions.tailCar);
+    Missions.tailCar = Vehicles.spawn('sedan', st.x, st.z, 0, 0x9a7bff);
+    Missions.tailCar.ai = { tail: true, angle: 0 };
+    scene.add(Missions.tailCar.mesh);
+  },
+
+  // Called every frame while a mission is active.
+  update(dt) {
+    const m = S.mission;
+    if (!m) return;
+    m.timer += dt;
+    const st = Missions.currentStage();
+    if (!st) return;
+    const p = S.player;
+    const d = st.x !== undefined ? Math.hypot(p.x - st.x, p.z - st.z) : 999;
+
+    if (st.type === 'goto') {
+      // Deliver-by-car stages only count while the player is in a car.
+      if (d < st.r && (!st.inCar || p.inCar)) Missions.advance();
+    } else if (st.type === 'steal') {
+      // Stage completes when the player is in the mission car.
+      if (p.inCar && p.inCar === Missions.targetCar) Missions.advance();
+    } else if (st.type === 'kill') {
+      // NOTE: reads S.killsThisMission — the same counter Combat.applyHit writes.
+      if (S.killsThisMission >= st.count) Missions.advance();
+    } else if (st.type === 'collect') {
+      if (d < st.r && Input.hit('KeyE')) {
+        S.cash += 0; // the payout lands at mission completion
+        HUD.toast('Cash secured.');
+        AudioSys.pickup();
+        Missions.advance();
+      }
+    } else if (st.type === 'tail') {
+      const t = Missions.tailCar;
+      if (t) {
+        // Courier loops the ridge road slowly.
+        t.ai.angle += dt * 0.12;
+        t.x = 60 + Math.sin(t.ai.angle) * 60;
+        t.z = -120 + Math.cos(t.ai.angle) * 40;
+        t.yaw = Math.atan2(-Math.cos(t.ai.angle), Math.sin(t.ai.angle));
+        t.mesh.position.set(t.x, 0, t.z);
+        t.mesh.rotation.y = t.yaw;
+        const td = Math.hypot(p.x - t.x, p.z - t.z);
+        if (td >= 15 && td <= 45) {
+          m.timer += 0; // timer already accumulates; track hold time separately
+          m.hold = (m.hold || 0) + dt;
+          HUD.objective(`Stay in range… ${Math.ceil(st.time - (m.hold || 0))}s  (${Math.round(td)}m)`);
+          if ((m.hold || 0) >= st.time) Missions.advance();
+        } else {
+          m.hold = Math.max(0, (m.hold || 0) - dt * 2);
+          HUD.objective(td < 15 ? 'Too close — back off!' : `Get closer to the courier (${Math.round(td)}m)`);
+          if (td < 8) { HUD.toast('Spotted! The courier is on to you.'); m.hold = 0; }
+        }
+      }
+    } else if (st.type === 'escape') {
+      if (d < st.r && S.wanted <= (st.wanted || 4)) {
+        // Reached the boat with heat still on: mission done, heat drops.
+        Police.setWanted(0, true);
+        Missions.advance();
+      } else if (d < st.r) {
+        HUD.objective('Lose some heat first — stay out of sight, then come back.');
+      }
+    }
+    // Marker pulse.
+    if (Missions.marker) {
+      const s = 1 + Math.sin(S.time * 3) * 0.08;
+      Missions.marker.scale.set(s, 1, s);
+    }
+  },
+
   complete() {
-    const S = VEL.State, a = this.active;
-    if (!a) return;
-    const def = a.def;
-    const timeUsed = S.time - a.startTime;
-    const medal = this.medalFor(def, timeUsed, S.damageTaken, S.wanted);
-    this.done[def.id] = true; this.medals[def.id] = medal;
-    S.cash += def.prize; S.rp += def.rp;
-    S.stats.missionsDone++; S.stats.cashEarned += def.prize;
-    VEL.Districts.bump(def.district, 8);
-    VEL.Audio.missionPass(); VEL.Audio.cash();
-    VEL.City.setMarker(0, 0, false);
-    VEL.HUD.showMissionPass(def, medal, timeUsed);
-    VEL.HUD.toast('MISSION PASSED · ' + medal + ' MEDAL · +$' + def.prize + ' · +' + def.rp + ' RP');
-    VEL.Save.autosave();
-    this.active = null; S.mission = null;
-    S.inMissionHeat = false;
-    // unlock next mission
-    if (def.id < 6) { VEL.HUD.toast('NEXT JOB AVAILABLE — press ENTER'); S.nextMission = def.id + 1; }
-    else { VEL.HUD.toast('ALL MISSIONS COMPLETE — YOU OWN VELMARA'); S.nextMission = 0; S.storyComplete = true; }
+    const m = S.mission;
+    if (!m) return;
+    const def = m.def;
+    const elapsed = m.timer;
+    // Medal: gold beats par with little damage, silver beats par, else bronze.
+    const medal = elapsed <= def.par && m.damageTaken < 40 ? 'G' : elapsed <= def.par * 1.4 ? 'S' : 'B';
+    S.cash += def.reward;
+    S.rp += def.rp;
+    S.missionsDone++;
+    S.missionRatings[def.id] = medal;
+    const d = DISTRICTS.find((x) => x.name === def.district);
+    if (d) Districts.addStanding(d.name, 8);
+    HUD.dialog(def.giver, `Job done, Rhea. ${def.title} — paid $${def.reward.toLocaleString()}. Medal: ${medal === 'G' ? 'GOLD' : medal === 'S' ? 'SILVER' : 'BRONZE'}.`);
+    HUD.toast(`MISSION COMPLETE — ${def.title}  +$${def.reward}  +${def.rp} RP  [${medal}]`);
+    AudioSys.mission();
+    Missions.clearMarker();
+    People.clearEnemies(City.scene);
+    if (Missions.tailCar) { Vehicles.remove(Missions.tailCar); Missions.tailCar = null; }
+    Missions.targetCar = null;
+    S.mission = null;
+    Game.refreshMissionBoard();
   },
-  medalFor(def, timeUsed, dmg, wanted) {
-    const par = 150 + def.id * 20;
-    let score = 0;
-    if (timeUsed < par) score += 2; else if (timeUsed < par * 1.6) score += 1;
-    if (dmg < 30) score += 1;
-    if (wanted <= 2) score += 1;
-    return score >= 4 ? 'GOLD' : score >= 2 ? 'SILVER' : 'BRONZE';
-  },
-  fail(reason) {
-    const a = this.active;
-    if (!a) return;
-    VEL.HUD.toast('MISSION FAILED — ' + reason);
-    VEL.City.setMarker(0, 0, false);
-    this.active = null; VEL.State.mission = null;
-  },
-  startNext() {
-    const S = VEL.State;
-    if (S.nextMission) this.start(S.nextMission);
+
+  abort() {
+    Missions.clearMarker();
+    People.clearEnemies(City.scene);
+    if (Missions.tailCar) { Vehicles.remove(Missions.tailCar); Missions.tailCar = null; }
+    Missions.targetCar = null;
+    S.mission = null;
   },
 };

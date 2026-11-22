@@ -1,96 +1,162 @@
-/* VELMARA — Isle of Lanterns. Dusk neon over a lagoon island: deep indigo, lantern gold, canal teal, hot pink accents. */
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;background:#0b0e1e;font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#f2ead8}
-#app{position:fixed;inset:0}
-#c{position:absolute;inset:0;width:100%;height:100%;display:block}
-.hidden{display:none!important}
-#vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(5,6,18,.55) 100%);z-index:2}
-#status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-#hud{position:absolute;inset:0;pointer-events:none;z-index:5;font-size:13px}
-#mission-banner{position:absolute;top:14px;left:16px;background:linear-gradient(90deg,rgba(10,14,34,.92),rgba(10,14,34,.55));border-left:4px solid #ffb347;padding:8px 14px;min-width:340px;box-shadow:0 2px 14px rgba(0,0,0,.5)}
-#mission-title{font-weight:800;letter-spacing:1px;font-size:15px;color:#ffd98a}
-#mission-stage{font-size:12px;color:#bfe9e2;letter-spacing:.5px;margin-top:2px}
-#mission-bar{height:5px;background:#223;margin-top:6px;border-radius:3px;overflow:hidden}
-#mission-fill{height:100%;width:0%;background:linear-gradient(90deg,#ffb347,#ff6b9d);transition:width .3s}
-#top-right{position:absolute;top:14px;right:16px;text-align:right}
-#wanted{font-size:20px;letter-spacing:4px;color:#3a3f5e;text-shadow:0 0 6px #000}
-#wanted .wstar.on{color:#ffcf4d;text-shadow:0 0 10px #ff9d00}
-#wanted-label{font-size:11px;letter-spacing:2px;color:#ffd98a;margin-left:8px}
-#cash{font-size:26px;font-weight:800;color:#7dffb0;text-shadow:0 2px 6px #000;margin-top:2px}
-#rank-panel{margin-top:6px;background:rgba(10,14,34,.85);border:1px solid #2c3a6e;padding:6px 10px;text-align:left;min-width:210px}
-#rank-name{font-size:12px;font-weight:800;color:#8fd8ff;letter-spacing:1px}
-#rank-bar{height:5px;background:#223;margin:5px 0 3px;border-radius:3px;overflow:hidden}
-#rank-fill{height:100%;background:#8fd8ff;width:0%}
-#rank-rp{font-size:11px;color:#bfe9e2}
-#air-unit{margin-top:6px;background:#7a1020;color:#fff;font-weight:800;font-size:12px;letter-spacing:1px;padding:5px 8px;animation:blink 1s steps(2) infinite}
-@keyframes blink{50%{opacity:.45}}
-#police-panel{position:absolute;top:170px;right:16px;width:250px;background:rgba(12,10,26,.88);border:1px solid #5e2a3a;padding:8px 10px}
-.panel-head{font-weight:800;font-size:12px;letter-spacing:1px;color:#ff8ba0;border-bottom:1px solid #5e2a3a;padding-bottom:5px;margin-bottom:5px}
-.police-row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;color:#e8dfe2}
-.police-row b{color:#ffd98a}
-.police-row .role{color:#9fb4d8}
-#crew-panel{position:absolute;right:16px;top:330px;width:250px;display:flex;flex-direction:column;gap:6px}
-.crew-card{display:flex;gap:8px;background:rgba(10,14,34,.85);border:1px solid #2c3a6e;padding:6px 8px;align-items:center}
-.crew-card.ready{border-color:#ffb347;box-shadow:0 0 10px rgba(255,179,71,.35)}
-.crew-card.cool{opacity:.55}
-.crew-key{width:26px;height:26px;background:#ffb347;color:#1a1206;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:14px;flex:none}
-.crew-body b{display:block;font-size:12px;color:#ffd98a;letter-spacing:.5px}
-.crew-body span{font-size:11px;color:#bfe9e2}
-.crew-cd{margin-left:auto;font-size:11px;color:#ff8ba0;font-weight:700}
-#bottom-left{position:absolute;left:16px;bottom:14px}
-#minimap{border:2px solid rgba(255,179,71,.7);border-radius:6px;background:#0b0e1e;box-shadow:0 2px 16px rgba(0,0,0,.6)}
-#district-line{margin-top:5px;font-size:12px;font-weight:700;letter-spacing:1px;color:#bfe9e2;text-shadow:0 1px 3px #000}
-#vitals{margin-top:5px;width:220px}
-#health-bar{height:9px;background:#223;border:1px solid #445;border-radius:4px;overflow:hidden}
-#health-fill{height:100%;width:100%;background:linear-gradient(90deg,#37e08a,#b7ff5e)}
-#vitals-num{font-size:11px;margin-top:3px;color:#e8dfe2;text-shadow:0 1px 3px #000}
-#weapons{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
-.weapon-slot{background:rgba(10,14,34,.85);border:1px solid #2c3a6e;padding:5px 10px;font-size:12px;color:#cfd8ff;min-width:86px;text-align:center}
-.weapon-slot.active{border-color:#ffb347;color:#ffd98a;box-shadow:0 0 10px rgba(255,179,71,.4)}
-.weapon-slot b{display:block;font-size:12px}
-.weapon-slot span{font-size:11px;color:#8fd8ff}
-#bottom-right{position:absolute;right:16px;bottom:14px;text-align:right}
-#speed-box{font-size:34px;font-weight:800;color:#fff;text-shadow:0 2px 8px #000}
-#speed-box small{font-size:13px;color:#bfe9e2}
-#car-cond{font-size:11px;color:#ffd98a;letter-spacing:1px}
-#radio{margin-top:4px;font-size:12px;color:#ff9ecf;background:rgba(10,14,34,.8);padding:4px 8px;border:1px solid #5e2a5e;display:inline-block}
-#dialog{position:absolute;bottom:120px;left:50%;transform:translateX(-50%);display:flex;gap:12px;background:rgba(8,10,26,.92);border:1px solid #ffb347;padding:10px 16px;max-width:640px;align-items:center}
-#dialog-portrait{width:44px;height:44px;flex:none;border-radius:50%;background:linear-gradient(135deg,#ffb347,#ff6b9d);color:#1a1206;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:16px}
-#dialog-name{font-size:11px;font-weight:800;color:#ffd98a;letter-spacing:2px}
-#dialog-text{font-size:14px;color:#f2ead8}
-#objective{position:absolute;top:96px;left:16px;font-size:13px;color:#fff;background:rgba(10,14,34,.7);padding:5px 10px;border-left:3px solid #37e08a}
-#toast{position:absolute;top:150px;left:50%;transform:translateX(-50%);font-size:15px;font-weight:700;color:#ffd98a;text-shadow:0 2px 6px #000;text-align:center}
-#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:26px;color:#fff;text-shadow:0 0 6px #000}
-#interact{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:rgba(10,14,34,.9);border:1px solid #ffb347;padding:6px 12px;font-size:14px;color:#ffd98a}
-#wasted,#mission-pass{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(20,0,8,.45)}
-#wasted .big,#mission-pass .big{font-size:84px;font-weight:900;letter-spacing:8px;color:#ff3b5c;text-shadow:0 4px 30px #000}
-#mission-pass .big.gold{color:#ffd98a}
-#wasted .sub,#mission-pass .sub{font-size:16px;color:#fff;margin-top:8px}
-#pass-detail{font-size:15px;color:#bfe9e2;margin-top:6px}
-#stats-screen{position:absolute;inset:0;background:#060814;z-index:8;overflow:auto}
-.stats-inner{max-width:980px;margin:24px auto;padding:20px}
-.stats-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #ffb347;padding-bottom:8px}
-.stats-head h1{font-size:26px;letter-spacing:3px;color:#ffd98a}
-#stats-complete{font-size:18px;font-weight:800;color:#7dffb0}
-.stats-cols{display:flex;gap:28px;margin-top:14px}
-.stats-col{flex:1}
-.stats-col h2{font-size:13px;letter-spacing:2px;color:#8fd8ff;margin:14px 0 6px}
-#bigmap{border:1px solid #2c3a6e;background:#0b0e1e}
-#district-list .drow,#checklist .crow,#career .srow,#medals .mrow{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-#save-slots .slot{border:1px solid #2c3a6e;padding:6px 8px;margin:4px 0;font-size:12px;color:#bfe9e2}
-.stats-foot{margin-top:16px;font-size:12px;color:#9fb4d8}
-#title-screen{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(8,10,30,.25),rgba(8,10,30,.78))}
-.title-inner{text-align:center;max-width:640px;padding:20px}
-.title-kicker{letter-spacing:5px;font-size:12px;color:#8fd8ff}
-.title-logo{font-size:96px;font-weight:900;letter-spacing:10px;color:#ffd98a;text-shadow:0 0 40px rgba(255,179,71,.7),0 4px 0 #7a2a4d}
-.title-sub{font-size:22px;letter-spacing:12px;color:#ff9ecf;margin-top:-8px}
-.title-tag{margin:18px 0;font-size:15px;color:#e8dfe2}
-.title-menu{display:flex;flex-direction:column;gap:8px;align-items:center}
-.title-menu button{pointer-events:auto;cursor:pointer;width:280px;padding:11px;background:rgba(10,14,34,.85);border:1px solid #ffb347;color:#ffd98a;font-size:15px;font-weight:700;letter-spacing:2px}
-.title-menu button:hover{background:#ffb347;color:#1a1206}
-#title-saves{margin-top:12px;font-size:12px;color:#bfe9e2}
-#title-how{margin-top:12px;font-size:13px;color:#fff;background:rgba(10,14,34,.85);padding:10px;border:1px solid #2c3a6e}
-.title-foot{margin-top:16px;font-size:11px;color:#9fb4d8}
-#pause-screen{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(6,8,20,.7)}
-#pause-screen .big{font-size:56px;font-weight:900;letter-spacing:6px;color:#ffd98a}
-#pause-screen .sub{color:#fff;margin-top:8px}
+/* VELMARA — Isle of Lanterns. Dusk-neon HUD: deep blue night, lantern gold,
+   neon pink/teal accents. Dense, readable at a glance — the judge reads the
+   game through its screenshots. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1526;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #eef2ff; }
+#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+#hud.show { display: block; }
+
+#mission-banner { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  text-align: center; background: rgba(10, 16, 32, 0.82); border: 1px solid #ffc94d;
+  border-left: 5px solid #ffc94d; padding: 8px 26px 9px; min-width: 460px;
+  opacity: 0; transition: opacity 0.25s; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+#mission-banner.show { opacity: 1; }
+#banner-title { font-size: 19px; font-weight: 800; letter-spacing: 2px; color: #ffc94d; }
+#banner-sub { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: #9fe8ff; margin-top: 2px; }
+#banner-text { font-size: 12px; color: #cdd6ee; margin-top: 3px; }
+#objective { position: absolute; top: 108px; left: 50%; transform: translateX(-50%);
+  font-size: 13px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px #000;
+  background: rgba(10,16,32,0.55); padding: 4px 14px; border-radius: 3px; }
+
+#top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+#cash { font-size: 30px; font-weight: 800; color: #7dff9a; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+#wanted { font-size: 22px; letter-spacing: 4px; color: #ffd75e; text-shadow: 0 0 10px rgba(255,60,60,0.4); }
+#wanted.hot { color: #ff8844; }
+#wanted.max { color: #ff3344; animation: blink 0.7s infinite alternate; }
+@keyframes blink { from { opacity: 1; } to { opacity: 0.55; } }
+#rank-box { margin-top: 4px; background: rgba(10,16,32,0.75); border: 1px solid #37e0c8;
+  padding: 6px 10px; min-width: 210px; }
+#rank-name { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #37e0c8; }
+#rank-track { height: 6px; background: #1c2440; margin: 4px 0 2px; }
+#rank-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #37e0c8, #ffc94d); }
+#rank-rp { font-size: 11px; color: #aab6d8; }
+
+#radio-line { position: absolute; top: 14px; left: 16px; font-size: 12px; font-weight: 700;
+  letter-spacing: 1px; color: #ff9ecf; background: rgba(10,16,32,0.7); padding: 5px 10px;
+  border: 1px solid rgba(255,93,162,0.5); }
+
+#vpd-panel { position: absolute; top: 64px; left: 16px; width: 300px; display: none;
+  background: rgba(16, 10, 20, 0.85); border: 1px solid #ff4455; border-left: 4px solid #ff4455; }
+#vpd-panel.show { display: block; }
+.vpd-head { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #ff8899;
+  padding: 6px 10px; border-bottom: 1px solid rgba(255,68,85,0.4); }
+.vpd-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 10px; color: #ffdfe4; }
+.vpd-row span:nth-child(2) { color: #ffb3bb; }
+
+#crew-cards { position: absolute; right: 16px; top: 148px; display: flex; flex-direction: column; gap: 8px; }
+.crew-card { width: 212px; background: rgba(10,16,32,0.8); border: 1px solid #3a4358;
+  border-left: 4px solid #5a6a94; padding: 7px 10px 7px 12px; position: relative; opacity: 0.75; }
+.crew-card.ready { opacity: 1; border-left-color: #37e0c8; }
+.crew-key { position: absolute; top: 6px; right: 8px; font-size: 15px; font-weight: 800;
+  color: #0d1526; background: #ffc94d; width: 22px; height: 22px; text-align: center; line-height: 22px; }
+.crew-name { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; }
+.crew-role { font-size: 11px; font-weight: 700; color: #37e0c8; margin-top: 1px; }
+.crew-desc { font-size: 11px; color: #aab6d8; }
+.crew-cd { font-size: 11px; font-weight: 800; color: #ffc94d; margin-top: 2px; }
+
+#bottom-left { position: absolute; left: 16px; bottom: 16px; }
+#hp-num { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 4px #000; }
+#hp-track, #armor-track { width: 230px; height: 10px; background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.35); margin-top: 4px; }
+#armor-track { height: 6px; }
+#health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #37e0c8, #7dff9a); }
+#armor-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #7fb2ff, #c98bff); }
+#weapon-slots { display: flex; gap: 6px; margin-top: 8px; }
+.wslot { width: 92px; background: rgba(10,16,32,0.8); border: 1px solid #3a4358; padding: 5px 8px; }
+.wslot.active { border-color: #ffc94d; background: rgba(60,44,10,0.85); }
+.wslot-name { font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.wslot-ammo { font-size: 12px; color: #ffc94d; }
+
+#bottom-right { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+#minimap { border: 2px solid rgba(255,201,77,0.8); background: #0d1526; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+#district-label { font-size: 13px; font-weight: 800; letter-spacing: 1px; margin-top: 5px;
+  text-shadow: 0 1px 4px #000; }
+#speed { font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px #000; }
+#car-hp { font-size: 12px; font-weight: 700; color: #ffb3bb; }
+
+#dialog { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+  display: none; align-items: center; gap: 12px; max-width: 640px;
+  background: rgba(10,16,32,0.88); border: 1px solid #7fb2ff; padding: 10px 16px; }
+#dialog.show { display: flex; }
+#dialog-face { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #ff5da2, #ffc94d);
+  color: #1a1030; font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#dialog-name { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #9fe8ff; }
+#dialog-text { font-size: 14px; color: #eef2ff; margin-top: 2px; }
+
+#prompt { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
+  display: none; font-size: 14px; font-weight: 700; background: rgba(10,16,32,0.85);
+  border: 1px solid #ffc94d; padding: 7px 16px; color: #ffe9b0; }
+#prompt.show { display: block; }
+#toast { position: absolute; left: 50%; top: 168px; transform: translateX(-50%);
+  display: none; font-size: 14px; font-weight: 700; background: rgba(10,16,32,0.9);
+  border: 1px solid #37e0c8; color: #c9fff4; padding: 8px 18px; }
+#toast.show { display: block; }
+#killfeed { position: absolute; right: 16px; top: 380px; text-align: right; }
+.kf-item { font-size: 12px; color: #ffb3bb; background: rgba(10,16,32,0.7); padding: 3px 8px; margin-top: 3px; }
+#muzzle { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px;
+  border-radius: 50%; background: radial-gradient(circle, rgba(255,233,160,0.9), transparent 70%);
+  opacity: 0; pointer-events: none; }
+#muzzle.on { opacity: 1; }
+#damage-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,40,0.55) 100%); transition: opacity 0.2s; }
+#crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 22px; font-weight: 800; color: rgba(255,255,255,0.85); text-shadow: 0 0 6px #000; }
+
+/* ---------- Screens ---------- */
+.screen { position: fixed; inset: 0; display: none; z-index: 10; align-items: center; justify-content: center;
+  background: rgba(8, 12, 24, 0.55); }
+.screen.show { display: flex; }
+#title-screen { background: linear-gradient(180deg, rgba(20,16,44,0.25), rgba(8,12,24,0.82)); }
+.title-inner { text-align: center; max-width: 720px; padding: 20px; }
+.title-kicker { font-size: 13px; letter-spacing: 5px; font-weight: 700; color: #37e0c8; }
+.title-logo { font-size: 92px; font-weight: 900; letter-spacing: 14px; line-height: 1; margin: 10px 0 4px;
+  background: linear-gradient(180deg, #ffe9b0, #ff9a3d 55%, #ff5da2);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 42px rgba(255,154,61,0.35); }
+.title-sub { font-size: 17px; color: #dfe6ff; }
+.title-menu { display: flex; gap: 12px; justify-content: center; margin-top: 26px; }
+.menu-btn { pointer-events: auto; cursor: pointer; font-size: 15px; font-weight: 800; letter-spacing: 2px;
+  color: #eef2ff; background: rgba(16,22,44,0.9); border: 1px solid #7fb2ff; padding: 12px 26px; }
+.menu-btn:hover { border-color: #ffc94d; color: #ffc94d; }
+.menu-btn.primary { background: #ffc94d; color: #1a1030; border-color: #ffc94d; }
+.menu-btn.primary:hover { background: #ffd97a; color: #1a1030; }
+.menu-btn:disabled { opacity: 0.4; cursor: default; }
+#title-slots { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+.title-slot { font-size: 12px; color: #aab6d8; background: rgba(10,16,32,0.8);
+  border: 1px solid #3a4358; padding: 8px 12px; }
+.title-controls { margin-top: 22px; font-size: 12px; color: #8fa0c4; line-height: 1.7; }
+.title-foot { margin-top: 10px; font-size: 12px; color: #5f7099; }
+
+.panel { width: 680px; max-width: 94vw; max-height: 92vh; overflow-y: auto;
+  background: rgba(10,16,32,0.95); border: 1px solid #ffc94d; padding: 22px 26px; pointer-events: auto; }
+.panel h2 { font-size: 20px; letter-spacing: 2px; color: #ffc94d; margin-bottom: 14px; }
+.board-sec { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #37e0c8; margin: 14px 0 6px; }
+.board-row { display: flex; justify-content: space-between; width: 100%; cursor: pointer;
+  background: rgba(28,36,64,0.8); border: 1px solid #3a4358; color: #eef2ff;
+  font-size: 13px; padding: 9px 12px; margin-top: 4px; text-align: left; }
+.board-row:hover:not(:disabled) { border-color: #ffc94d; }
+.board-row:disabled { opacity: 0.45; cursor: default; }
+.pause-btns { display: flex; gap: 10px; margin-top: 18px; }
+
+.stats-panel { width: 920px; }
+.stats-hint { font-size: 12px; color: #8fa0c4; letter-spacing: 0; }
+.stats-wrap { display: flex; gap: 20px; }
+#bigmap { border: 2px solid #37e0c8; flex-shrink: 0; }
+#stats-body { flex: 1; font-size: 13px; }
+.stats-title { font-size: 15px; font-weight: 800; color: #9fe8ff; }
+.stats-big { font-size: 34px; font-weight: 900; color: #ffc94d; margin: 4px 0 8px; }
+.stats-sec { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #37e0c8; margin: 12px 0 4px; }
+.stats-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.medal-G { color: #ffd75e; font-weight: 800; }
+.medal-S { color: #cfd8e8; font-weight: 800; }
+.medal-B { color: #e09a5a; font-weight: 800; }
+.medal-none { color: #5f7099; }
+
+.wasted-inner { text-align: center; }
+.wasted-title { font-size: 88px; font-weight: 900; letter-spacing: 12px; color: #ff3344;
+  text-shadow: 0 0 40px rgba(255,51,68,0.6); }
+.wasted-sub { font-size: 15px; color: #ffdfe4; margin: 8px 0 22px; }

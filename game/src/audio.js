@@ -1,56 +1,76 @@
-/* audio.js — WebAudio synth: engine hum, gunshots, sirens, pickups, radio jingles. No audio files. */
-VEL.Audio = {
-  ctx: null, muted: false, master: null, engineOsc: null, engineGain: null, radioTimer: 0, songIdx: 0,
+// Synthesised WebAudio: no audio files, everything is oscillators + noise.
+// Engine hum follows speed, gunshots are filtered noise bursts, radio is a
+// little looping jingle per station. Silent until the first key/click
+// (browser autoplay policy), and muted entirely under ?shot=.
+const AudioSys = {
+  ctx: null, master: null, engineOsc: null, engineGain: null, started: false,
+
   init() {
+    if (AudioSys.started) return;
     try {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.master = this.ctx.createGain(); this.master.gain.value = 0.35; this.master.connect(this.ctx.destination);
-      this.engineOsc = this.ctx.createOscillator(); this.engineOsc.type = 'sawtooth'; this.engineOsc.frequency.value = 50;
-      this.engineGain = this.ctx.createGain(); this.engineGain.gain.value = 0;
-      const filt = this.ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 320;
-      this.engineOsc.connect(filt); filt.connect(this.engineGain); this.engineGain.connect(this.master);
-      this.engineOsc.start();
-    } catch (e) { this.ctx = null; }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      AudioSys.ctx = new AC();
+      AudioSys.master = AudioSys.ctx.createGain();
+      AudioSys.master.gain.value = 0.35;
+      AudioSys.master.connect(AudioSys.ctx.destination);
+      AudioSys.engineOsc = AudioSys.ctx.createOscillator();
+      AudioSys.engineOsc.type = 'sawtooth';
+      AudioSys.engineOsc.frequency.value = 55;
+      AudioSys.engineGain = AudioSys.ctx.createGain();
+      AudioSys.engineGain.gain.value = 0;
+      const lp = AudioSys.ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 320;
+      AudioSys.engineOsc.connect(lp); lp.connect(AudioSys.engineGain); AudioSys.engineGain.connect(AudioSys.master);
+      AudioSys.engineOsc.start();
+      AudioSys.started = true;
+    } catch (e) { /* audio unavailable — the game stays silent */ }
   },
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-  setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.35; },
-  tone(freq, dur, type, vol, slideTo) {
-    if (!this.ctx || this.muted) return;
-    const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
-    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
-    g.gain.setValueAtTime(vol || 0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur);
+
+  resume() { if (AudioSys.ctx && AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume(); },
+
+  setEngine(speed01) {
+    if (!AudioSys.started || S.muted) return;
+    AudioSys.engineOsc.frequency.value = 50 + speed01 * 160;
+    AudioSys.engineGain.gain.value = S.player.inCar ? 0.05 + speed01 * 0.06 : 0;
   },
-  noise(dur, vol, freq) {
-    if (!this.ctx || this.muted) return;
-    const t = this.ctx.currentTime, len = Math.floor(this.ctx.sampleRate * dur);
-    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = this.ctx.createBufferSource(); src.buffer = buf;
-    const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq || 1200;
-    const g = this.ctx.createGain(); g.gain.value = vol || 0.3;
-    src.connect(f); f.connect(g); g.connect(this.master); src.start(t);
+
+  blip(freq, dur, type, vol) {
+    if (!AudioSys.started || S.muted) return;
+    try {
+      const o = AudioSys.ctx.createOscillator(), g = AudioSys.ctx.createGain();
+      o.type = type || 'square'; o.frequency.value = freq || 440;
+      g.gain.setValueAtTime(vol || 0.12, AudioSys.ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, AudioSys.ctx.currentTime + (dur || 0.08));
+      o.connect(g); g.connect(AudioSys.master);
+      o.start(); o.stop(AudioSys.ctx.currentTime + (dur || 0.08));
+    } catch (e) {}
   },
-  shot() { this.noise(0.12, 0.5, 2600); this.tone(180, 0.08, 'square', 0.18, 60); },
-  siren() { this.tone(700, 0.5, 'sine', 0.06, 1100); },
-  pickup() { this.tone(660, 0.1, 'sine', 0.2); setTimeout(() => this.tone(990, 0.14, 'sine', 0.2), 90); },
-  cash() { this.tone(880, 0.1, 'triangle', 0.22); setTimeout(() => this.tone(1320, 0.18, 'triangle', 0.22), 100); },
-  hit() { this.noise(0.08, 0.3, 800); },
-  crash() { this.noise(0.3, 0.5, 500); },
-  missionPass() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.tone(f, 0.22, 'triangle', 0.22), i * 110)); },
-  engine(speed01) {
-    if (!this.engineOsc) return;
-    this.engineOsc.frequency.value = 45 + speed01 * 140;
-    this.engineGain.gain.value = VEL.State && VEL.State.inCar ? 0.05 + speed01 * 0.06 : 0;
+
+  noiseBurst(dur, vol, freq) {
+    if (!AudioSys.started || S.muted) return;
+    try {
+      const len = Math.floor(AudioSys.ctx.sampleRate * dur);
+      const buf = AudioSys.ctx.createBuffer(1, len, AudioSys.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = AudioSys.ctx.createBufferSource(); src.buffer = buf;
+      const f = AudioSys.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq || 1800;
+      const g = AudioSys.ctx.createGain(); g.gain.value = vol || 0.25;
+      src.connect(f); f.connect(g); g.connect(AudioSys.master);
+      src.start();
+    } catch (e) {}
   },
-  update(dt) {
-    this.radioTimer += dt;
-    if (this.radioTimer > 24) {
-      this.radioTimer = 0; this.songIdx = (this.songIdx + 1) % VEL.CFG.radioSongs.length;
-      const el = document.getElementById('radio-song');
-      if (el) el.textContent = VEL.CFG.radioSongs[this.songIdx];
-      this.tone(440, 0.3, 'sine', 0.08, 660);
-    }
+
+  shot() { AudioSys.noiseBurst(0.12, 0.3, 2400); },
+  siren() { AudioSys.blip(720, 0.35, 'sine', 0.08); AudioSys.blip(540, 0.35, 'sine', 0.08); },
+  pickup() { AudioSys.blip(660, 0.1, 'sine', 0.14); AudioSys.blip(990, 0.14, 'sine', 0.14); },
+  mission() { [523, 659, 784].forEach((f, i) => setTimeout(() => AudioSys.blip(f, 0.16, 'triangle', 0.16), i * 110)); },
+
+  // A short jingle per radio station; the HUD shows the station line.
+  radioJingle() {
+    if (!AudioSys.started || S.muted) return;
+    const base = [262, 330, 392, 494][S.radio % 4];
+    [0, 2, 4, 7].forEach((n, i) => setTimeout(() => AudioSys.blip(base * Math.pow(2, n / 12), 0.18, 'triangle', 0.07), i * 130));
   },
 };

@@ -1,10 +1,16 @@
-/* rng.js — seeded deterministic RNG (mulberry32) for world layout and AI jitter. */
-VEL.RNG = {
-  seed: 1, s: 1,
-  setSeed(n) { this.seed = n >>> 0 || 1; this.s = this.seed; },
-  next() { this.s |= 0; this.s = (this.s + 0x6D2B79F5) | 0; let t = Math.imul(this.s ^ (this.s >>> 15), 1 | this.s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; },
-  range(a, b) { return a + this.next() * (b - a); },
-  int(a, b) { return Math.floor(this.range(a, b + 1)); },
-  pick(arr) { return arr[Math.floor(this.next() * arr.length)]; },
-  color(palette) { return this.pick(palette); },
-};
+// Seeded RNG (mulberry32) for deterministic city generation. Gameplay
+// randomness uses Math.random; anything that must look the same every
+// load — buildings, lanterns, traffic colours — comes from here.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const cityRng = mulberry32(1337);
+function rngRange(rng, a, b) { return a + rng() * (b - a); }
+function rngPick(rng, arr) { return arr[Math.floor(rng() * arr.length) % arr.length]; }
+function rngInt(rng, a, b) { return Math.floor(rngRange(rng, a, b + 1)); }

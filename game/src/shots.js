@@ -1,81 +1,72 @@
-/* shots.js — ?shot= scenes: stage a real gameplay state, step it forward, flag __shotReady.
-   play = M6 chase (wanted 5, heli, police, in car at speed)
-   shootout = M2 on-foot night-market firefight
-   stats = Tab career/map screen
-   title = title screen over the lantern quarter */
-VEL.Shots = {
-  stage(name) {
-    const S = VEL.State, G = VEL.Game;
-    const seed = Number(new URLSearchParams(location.search).get('seed') || 1);
-    VEL.RNG.setSeed(seed);
-    if (name === 'title') {
-      S.screen = 'title';
+// Screenshot presets (?shot=...). Each one stages a real gameplay moment
+// through the same systems the player uses — no fake overlays, no
+// composited images. The cover is always mid-chase, wanted 5, heli up.
+const Shots = {
+  apply(name) {
+    const scene = Game.scene;
+    if (!scene) return;
+    if (name === 'title') { Game.showTitle(); return; }
+    Game.hideTitle();
+    if (name === 'play') {
+      Missions.start(1);
       return;
     }
-    // common: enter play, new game state, rich HUD
-    G.newGame();
-    S.cash = 18450; S.rp = 3900; S.armour = 55; S.hp = 72;
-    S.stats.carsStolen = 41; S.stats.copsEscaped = 12; S.stats.takenOut = 23; S.stats.distanceDriven = 48200;
-    if (name === 'play') {
-      // M6 chase: wanted 5, heli, in the gold getaway coupe at speed, police converging
-      VEL.Missions.start(6);
-      VEL.Missions.enterStage(2);
-      const car = G.spawnMissionCar(0, 60, 0xff8a3d, 'SUNSET GT');
-      car.speed = 34; car.heading = Math.PI;
-      S.player.x = 0; S.player.z = 60; S.player.heading = Math.PI;
-      S.god = true; // staged shot: police may not wreck the getaway car
-      G.enterCar(car);
-      VEL.Police.setWanted(5);
-      VEL.Districts.bump('kumala', 8);
-      VEL.HUD.dialog('CHIEF DARA VOSS', 'Solano. You have robbed my island long enough. Tonight the Grand Lantern burns — and so do you.');
-      VEL.HUD.toast('MISSION 6 · THE GRAND LANTERN — ESCAPE TO THE MARINA');
-    } else if (name === 'shootout') {
-      // M2 on-foot firefight at the canal market, night
-      VEL.Missions.start(2);
-      VEL.Missions.enterStage(1);
-      S.player.x = -84; S.player.z = 40; S.player.heading = Math.PI;
-      S.player.mesh.position.set(-84, 0, 40);
-      S.weaponIdx = 2; // SMG
-      S.god = true; // staged shot: keep Rhea at the staged HP
-      VEL.Police.setWanted(2);
-      VEL.HUD.dialog('IVO MAREK', 'Duck by a stall to hide. Clear the aisles, Rhea — the package is in the lantern case.');
-      VEL.HUD.toast('MISSION 2 · CANAL PICKUP — CLEAR THE AISLES');
-    } else if (name === 'stats') {
-      // career screen with progress already earned
-      VEL.Missions.done = { 1: true, 2: true, 3: true, 4: true, 5: true };
-      VEL.Missions.medals = { 1: 'GOLD', 2: 'SILVER', 3: 'GOLD', 4: 'BRONZE', 5: 'SILVER' };
-      VEL.Races.done = { lantern: true }; VEL.Races.best = { lantern: 74.3 };
-      S.packagesGot = VEL.CFG.packages.slice(0, 6).map((p) => p[0] + ',' + p[1]);
-      S.stuntsDone = VEL.CFG.stunts.slice(0, 3).map((p) => p[0] + ',' + p[1]);
-      S.exportsDone = 2; S.stats.taxiFares = 2;
-      S.stats.missionsDone = 5; S.stats.racesWon = 1; S.stats.cashEarned = 21400; S.stats.crewUses = 9;
-      S.cash = 18450; S.rp = 3900;
-      VEL.Districts.list[0].standing = 74; VEL.Districts.list[1].standing = 74; VEL.Districts.list[2].standing = 70; VEL.Districts.list[4].standing = 34;
-      S.screen = 'play'; S.playing = true;
-      VEL.HUD.showHud();
-      S.statsOpen = true; VEL.HUD.showStats();
-    }
-    // step the world forward so motion, AI and HUD settle
-    for (let i = 0; i < 150; i++) G.update(1 / 60);
-    if (name === 'play') {
-      // drive forward a bit so the chase reads at speed
-      VEL.Input.keys.KeyW = true;
-      for (let i = 0; i < 120; i++) G.update(1 / 60);
-      VEL.Input.keys.KeyW = false;
-      const pc = VEL.State.car;
-      if (pc) { pc.speed = 34; pc.hp = 100; } // hold speed + condition for the final frame
+    if (name === 'chase') {
+      // M6 finale: stage 4/4, wanted 5, heli overhead, Rhea in the orange
+      // Comet doing 90+ km/h down the marina road with pursuit behind.
+      Missions.start(6);
+      S.mission.stage = 3;
+      S.mission.damageTaken = 12;
+      Missions.showStage();
+      Police.setWanted(5);
+      const car = Vehicles.spawn('comet', 0, 110, Math.PI, 0xff7a2a);
+      scene.add(car.mesh);
+      Game.enterCar(car);
+      car.speed = 26;
+      car.hp = 62;
+      S.cash = 13750; S.rp = 1740;
+      for (let i = 0; i < 3; i++) Police.spawnPursuit(scene);
+      Police.makeHeli(scene);
+      HUD.dialog('Ivo Marek', 'The whole island is on you now, Rhea. Marina boat, straight ahead — do not stop!');
+      return;
     }
     if (name === 'shootout') {
-      for (let i = 0; i < 90; i++) G.update(1 / 60);
-      // close in on the shooters so the firefight reads in frame
-      const foes = VEL.People.enemies.filter((e) => !e.dead);
-      if (foes.length) {
-        const f = foes[0];
-        S.player.x = f.x; S.player.z = f.z + 11; S.player.heading = Math.PI;
-        S.player.mesh.position.set(S.player.x, 0, S.player.z);
-        for (let i = 0; i < 60; i++) G.update(1 / 60);
-      }
+      // M2 night market: stage 2/3, four shooters ahead, Rhea on foot
+      // with the SMG, tracers in the dark.
+      Missions.start(2);
+      S.mission.stage = 1;
+      Missions.showStage();
+      Missions.spawnStageEnemies(Missions.currentStage());
+      Game.teleportPlayer(-120, 14);
+      Game.camYaw = 0; // face north (-z) into the market
+      Combat.switchWeapon(2);
+      S.ammo[2] = 120;
+      S.cash = 3250; S.rp = 350;
+      Police.setWanted(2);
+      HUD.dialog('Ivo Marek', 'They knew you were coming. Duck by a stall to hide — then clear the aisles.');
+      return;
     }
-    window.__shotReady = true;
+    if (name === 'stats') {
+      // A late-game career for the stats screen: 6/6 missions, medals,
+      // races, packages, standing — the full completion picture.
+      S.cash = 14630; S.rp = 1860;
+      S.missionsDone = 6;
+      S.missionRatings = { 1: 'G', 2: 'S', 3: 'G', 4: 'S', 5: 'G', 6: 'G' };
+      S.racesDone = 1; S.raceWins = { 2: 'G' };
+      S.packages = 4; S.packagesFound = { 0: true, 1: true, 2: true, 3: true };
+      S.stunts = 2; S.stuntsDone = { 0: true, 1: true };
+      S.fares = 1; S.exports = 1;
+      S.kills = 18; S.carsStolen = 7; S.distanceKm = 48.2; S.copsEscaped = 12;
+      S.stats.shots = 120; S.stats.hits = 71;
+      S.districtStanding['Lantern Quarter'] = 78;
+      S.districtStanding['Old Pasaru'] = 74;
+      S.districtStanding['Banyan Green'] = 70;
+      S.districtStanding['Kumala Strand'] = 58;
+      S.districtStanding['Ridge Town'] = 41;
+      Stats.open = false;
+      Stats.toggle();
+      return;
+    }
+    // Unknown ?shot= value: plain gameplay.
   },
 };

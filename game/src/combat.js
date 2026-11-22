@@ -1,109 +1,117 @@
-/* combat.js — hitscan shooting, tracers, muzzle flash, reload, enemy fire, damage to player/car. */
-VEL.Combat = {
-  tracers: [], fireCd: 0, reloadTimer: 0, mags: [Infinity, 12, 30, 6],
-  weapon() { return VEL.CFG.weapons[VEL.State.weaponIdx]; },
-  tryFire() {
-    const S = VEL.State;
-    if (S.inCar || S.dead || this.reloadTimer > 0 || this.fireCd > 0) return;
-    const w = this.weapon();
-    if (w.id === 'fists') { this.melee(); return; }
-    if (this.mags[S.weaponIdx] <= 0) { this.reload(); return; }
-    this.fireCd = w.rate;
-    this.mags[S.weaponIdx]--;
-    S.stats.shotsFired++;
-    VEL.Audio.shot();
-    S.gunfireTimer = 1.5;
-    // aim from camera centre: raycast against enemies, police foot units, traffic cars
-    const cam = VEL.Game.camera;
-    const origin = cam.position.clone();
-    const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
-    let best = null, bd = w.range;
-    const consider = (x, z, y, ref, hp) => {
-      const dx = x - origin.x, dz = z - origin.z, dy = y - origin.y;
-      const along = dx * dir.x + dy * dir.y + dz * dir.z;
-      if (along < 1 || along > bd) return;
-      const px = origin.x + dir.x * along, py = origin.y + dir.y * along, pz = origin.z + dir.z * along;
-      const dd = Math.hypot(x - px, y - py, z - pz);
-      if (dd < 2.2) { bd = along; best = { ref, hp, along }; }
-    };
-    for (const e of VEL.People.enemies) if (!e.dead) consider(e.x, e.z, 1.2, e, 'enemy');
-    for (const u of VEL.Police.units) if (u.kind === 'foot') consider(u.x, u.z, 1.2, u, 'police');
-    for (const c of VEL.Vehicles.cars) if (!c.isTraffic || true) consider(c.x, c.z, 1, c, 'car');
-    const end = origin.clone().add(dir.clone().multiplyScalar(bd));
-    this.spawnTracer(origin, end);
+// Combat: four weapon slots, hitscan shooting with a short aim assist,
+// tracers, muzzle flash and per-target health. Kills go through ONE
+// counter — applyHit increments S.killsThisMission, which the mission
+// engine reads. (A second counter was the v8 kill-stage bug.)
+const Combat = {
+  fireCd: 0, tracer: null, tracerT: 0,
+
+  current() { return WEAPONS[S.weapon]; },
+
+  switchWeapon(i) {
+    if (i < 0 || i >= WEAPONS.length) return;
+    S.weapon = i;
+    HUD.toast(`${WEAPONS[i].name} ready`);
+    AudioSys.blip(520, 0.06, 'square', 0.1);
+  },
+
+  // Hitscan from the camera: aim assist picks the enemy nearest the
+  // crosshair inside a small cone; otherwise the shot flies straight.
+  fire(scene, camera) {
+    const w = Combat.current();
+    if (Combat.fireCd > 0) return;
+    if (w.ammo !== -1 && S.ammo[S.weapon] <= 0) {
+      AudioSys.blip(180, 0.08, 'square', 0.12);
+      HUD.toast('No ammo — visit the gun shop');
+      Combat.fireCd = 0.3;
+      return;
+    }
+    Combat.fireCd = w.rate;
+    S.stats.shots++;
+    if (w.ammo !== -1) S.ammo[S.weapon]--;
+    AudioSys.shot();
+    const p = S.player;
+    const origin = new THREE.Vector3(p.x, 1.5, p.z);
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    // Aim assist: nearest enemy within 10 degrees of the camera ray.
+    let best = null, bestScore = 0.17; // cos(10deg) ~ 0.985 -> use angle
+    for (const e of People.enemies) {
+      const to = new THREE.Vector3(e.x - p.x, 1.2 - 1.5, e.z - p.z);
+      const d = to.length();
+      if (d > w.range) continue;
+      to.normalize();
+      const ang = Math.acos(Math.max(-1, Math.min(1, to.dot(dir))));
+      if (ang < 0.22 && (best === null || ang < bestScore)) { best = e; bestScore = ang; }
+    }
+    let hitPoint = null;
     if (best) {
-      S.stats.shotsHit++;
-      const spread = w.id === 'shotgun' ? 3 : 1;
-      for (let i = 0; i < spread; i++) this.applyHit(best.ref, best.hp, w.dmg);
+      hitPoint = new THREE.Vector3(best.x, 1.2, best.z);
+      Combat.applyHit(best, w.dmg, 'player');
+      S.stats.hits++;
+    } else {
+      hitPoint = origin.clone().add(dir.clone().multiplyScalar(w.range));
     }
+    // Tracer line + muzzle flash, both fade in a few frames.
+    if (!Combat.tracer) {
+      const geo = new THREE.BufferGeometry().setFromPoints([origin, hitPoint]);
+      Combat.tracer = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.9 }));
+      scene.add(Combat.tracer);
+    } else {
+      Combat.tracer.geometry.setFromPoints([origin, hitPoint]);
+      Combat.tracer.material.opacity = 0.9;
+    }
+    Combat.tracerT = 0.07;
+    HUD.flashMuzzle();
   },
-  applyHit(ref, kind, dmg) {
-    const S = VEL.State;
-    if (kind === 'enemy') {
-      ref.hp -= dmg; VEL.Audio.hit();
-      if (ref.hp <= 0 && !ref.dead) {
-        ref.dead = true;
-        ref.mesh.rotation.x = -Math.PI / 2; ref.mesh.position.y = 0.4;
-        S.stats.takenOut++; S.stats.killsThisMission++; S.killsThisMission++;
-        VEL.Police.addWanted(0); // killing already-heated enemies keeps heat
-        VEL.HUD.toast(ref.name + ' DOWN');
-        setTimeout(() => VEL.People.removeEnemy(ref), 4000);
+
+  // The ONLY place kills are counted. Returns true when the target died.
+  applyHit(target, dmg, source) {
+    target.hp -= dmg;
+    if (target.hp > 0) return false;
+    if (target.kind === 'enemy' || target.kind === 'cop' || target.kind === 'ped') {
+      S.kills++;
+      S.killsThisMission++;
+      if (target.kind === 'cop') Police.addHeat(1);
+      else if (target.kind === 'ped') Police.addHeat(1);
+      if (target.kind === 'enemy' || target.kind === 'cop') {
+        const i = People.enemies.indexOf(target);
+        if (i >= 0) People.enemies.splice(i, 1);
+        const j = Police.foot.indexOf(target);
+        if (j >= 0) Police.foot.splice(j, 1);
+      } else {
+        const i = People.peds.indexOf(target);
+        if (i >= 0) People.peds.splice(i, 1);
       }
-    } else if (kind === 'police') {
-      ref.hp -= dmg;
-      if (ref.hp <= 0) { VEL.Police.removeUnit(ref); S.stats.takenOut++; VEL.Police.addWanted(1); VEL.HUD.toast('VPD OFFICER DOWN — WANTED UP'); }
-    } else if (kind === 'car') {
-      ref.hp -= dmg;
-      if (ref.hp <= 0 && !ref.isTraffic) { /* player car explosion handled in game */ }
+      if (target.mesh.parent) target.mesh.parent.remove(target.mesh);
+      HUD.killFeed(`${target.name || 'Pedestrian'} taken out`);
+    }
+    return true;
+  },
+
+  // Enemy return fire: hitscan with a miss chance that grows with distance.
+  enemyShoot(enemy, player, dist) {
+    AudioSys.noiseBurst(0.1, 0.16, 1400);
+    const hitChance = Math.max(0.12, 0.55 - dist * 0.011);
+    if (Math.random() < hitChance) Game.damagePlayer(7 + Math.random() * 6, enemy.name || 'shooter');
+    // Tracer from the enemy toward the player.
+    const scene = City.scene;
+    if (scene) {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(enemy.x, 1.3, enemy.z),
+        new THREE.Vector3(player.x, 1.3, player.z),
+      ]);
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff5566, transparent: true, opacity: 0.8 }));
+      scene.add(line);
+      setTimeout(() => { if (line.parent) line.parent.remove(line); }, 90);
     }
   },
-  melee() {
-    const S = VEL.State;
-    this.fireCd = 0.35; VEL.Audio.hit();
-    for (const e of VEL.People.enemies) {
-      if (e.dead) continue;
-      if (Math.hypot(e.x - S.player.x, e.z - S.player.z) < 2.4) this.applyHit(e, 'enemy', 12);
-    }
-  },
-  enemyShoot(from, dist) {
-    const S = VEL.State;
-    if (S.dead || S.god) return;
-    const fromPos = new THREE.Vector3(from.x || 0, from.y ? from.y : 1.4, from.z || 0);
-    const to = new THREE.Vector3(S.player.x, 1.2, S.player.z);
-    this.spawnTracer(fromPos, to, 0xff5566);
-    VEL.Audio.shot();
-    // hit chance falls with distance
-    const hitP = Math.max(0.08, 0.42 - dist * 0.008);
-    if (VEL.RNG.next() < hitP) {
-      const dmg = 6 + VEL.RNG.range(0, 6);
-      VEL.Game.damagePlayer(dmg, 'shot');
-    }
-  },
-  spawnTracer(a, b, color) {
-    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color || 0xffd24d, transparent: true, opacity: 0.9 }));
-    VEL.Game.scene.add(line);
-    this.tracers.push({ line, life: 0.09 });
-  },
-  reload() {
-    const S = VEL.State, w = this.weapon();
-    if (w.id === 'fists' || this.reloadTimer > 0) return;
-    this.reloadTimer = 1.1;
-    VEL.HUD.toast('RELOADING ' + w.name + '…');
-  },
+
   update(dt) {
-    this.fireCd -= dt;
-    if (this.reloadTimer > 0) {
-      this.reloadTimer -= dt;
-      if (this.reloadTimer <= 0) {
-        const S = VEL.State, w = this.weapon();
-        const need = w.mag - this.mags[S.weaponIdx];
-        const take = Math.min(need, w.ammo);
-        this.mags[S.weaponIdx] += take;
-        VEL.HUD.toast(w.name + ' RELOADED');
-      }
+    if (Combat.fireCd > 0) Combat.fireCd -= dt;
+    if (Combat.tracer && Combat.tracerT > 0) {
+      Combat.tracerT -= dt;
+      Combat.tracer.material.opacity = Math.max(0, Combat.tracerT / 0.07) * 0.9;
+      if (Combat.tracerT <= 0 && Combat.tracer.parent) Combat.tracer.parent.remove(Combat.tracer);
     }
-    for (const t of this.tracers) { t.life -= dt; if (t.life <= 0) { VEL.Game.scene.remove(t.line); } }
-    this.tracers = this.tracers.filter((t) => t.life > 0);
   },
 };
