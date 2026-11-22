@@ -189,6 +189,9 @@ const Game = {
       Police.addHeat(1);
       HUD.toast('Car stolen — the VPD noticed.');
     }
+    // A stolen pursuit car stops being a pursuit car.
+    const pi = Police.cars.indexOf(car);
+    if (pi >= 0) Police.cars.splice(pi, 1);
     AudioSys.blip(220, 0.1, 'square', 0.12);
   },
 
@@ -491,7 +494,8 @@ const Game = {
       S.distanceKm += Math.abs(p.inCar.speed) * dt / 1000;
       AudioSys.setEngine(Math.abs(p.inCar.speed) / 34);
       if (Input.hit('KeyE')) Game.exitCar();
-      if (p.inCar.hp <= 0) Game.carWrecked();
+      // exitCar() above can clear inCar in this same frame — re-check.
+      if (p.inCar && p.inCar.hp <= 0) Game.carWrecked();
     } else {
       // On foot: camera-relative movement, sprint with Shift.
       const mv = Input.moveAxis();
