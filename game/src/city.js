@@ -75,9 +75,14 @@ const City = {
         g.fillRect(X(r) - 1, Z(t) - 1, 2, 6);
       }
     }
-    // centre plaza (Lantern Quarter) — warm tiles
-    g.fillStyle = '#3a2f22';
+    // centre plaza (Lantern Quarter) — dark warm tiles with a gold border
+    g.fillStyle = '#2a241c';
     g.fillRect(X(-30), Z(-30), 60 * scale, 60 * scale);
+    g.strokeStyle = '#8a6a2a'; g.lineWidth = 2;
+    for (let t = -30; t <= 30; t += 10) {
+      g.beginPath(); g.moveTo(X(t), Z(-30)); g.lineTo(X(t), Z(30)); g.stroke();
+      g.beginPath(); g.moveTo(X(-30), Z(t)); g.lineTo(X(30), Z(t)); g.stroke();
+    }
     g.strokeStyle = '#ffc94d'; g.lineWidth = 3;
     g.strokeRect(X(-30), Z(-30), 60 * scale, 60 * scale);
     const tex = new THREE.CanvasTexture(cv);
@@ -129,12 +134,15 @@ const City = {
     const lits = ['#ffd27a', '#9fe8ff', '#ffb3d1'];
     const facades = bases.map((b, i) => {
       const t = City.facadeTexture(b, lits[i % lits.length]);
-      return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.38, roughness: 0.85 });
+      return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.85 });
     });
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x1c2029, roughness: 0.95 });
+    // Buildings sit in the BLOCKS between roads (centres at ±30, ±90, ±150),
+    // never on a road or an intersection — every mission marker, package
+    // and shop sits on the road grid and must stay reachable.
     const cells = [];
-    for (let gx = -3; gx <= 3; gx++) for (let gz = -3; gz <= 3; gz++) {
-      const cx = gx * 60, cz = gz * 60;
+    for (let gx = -3; gx <= 2; gx++) for (let gz = -3; gz <= 2; gz++) {
+      const cx = gx * 60 + 30, cz = gz * 60 + 30;
       if (Math.abs(cx) < 34 && Math.abs(cz) < 34) continue; // centre plaza stays open
       if (cx > -110 && cx < -60 && cz > -210 && cz < 60) continue; // canal strip
       cells.push([cx, cz]);
@@ -198,10 +206,11 @@ const City = {
       }
     }
 
-    // Night market stalls near Old Pasaru (-120, 0): striped awnings.
+    // Night market stalls in Old Pasaru, west of the -120 road (off the
+    // road itself, so the M2 market marker stays walkable).
     const awn = [0xff5da2, 0x37e0c8, 0xffc94d, 0x7fb2ff];
     for (let i = 0; i < 10; i++) {
-      const x = -132 + (i % 5) * 7, z = -8 + Math.floor(i / 5) * 14;
+      const x = -142 + (i % 5) * 3, z = -12 + Math.floor(i / 5) * 12;
       const stall = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, 3.5),
         new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.9 }));
       stall.position.set(x, 1.2, z); stall.castShadow = true;
