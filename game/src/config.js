@@ -1,61 +1,90 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
-
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
-
-export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+/* config.js — VELMARA tuning, world layout, missions, races, districts, crew, weapons. */
+window.VEL = window.VEL || {};
+VEL.CFG = {
+  world: 420, half: 210, roadEvery: 42, roadWidth: 12,
+  startCash: 1250, startPos: { x: 0, z: 120 },
+  playerSpeed: 9, playerRun: 13, carAccel: 26, carMax: 46, carBrake: 40, carTurn: 1.9,
+  wantedDecay: 0.012, heliAt: 5, roadblockAt: 3,
+  ranks: [
+    { name: 'WHEELMAN', rp: 0 }, { name: 'FIXER', rp: 400 }, { name: 'SHOT CALLER', rp: 1000 },
+    { name: 'LANTERN KING', rp: 2000 }, { name: 'ISLE LEGEND', rp: 3600 },
+  ],
+  weapons: [
+    { id: 'fists', name: 'FISTS', dmg: 12, rate: 0.35, range: 2.2, mag: Infinity, ammo: Infinity, auto: false },
+    { id: 'pistol', name: 'PISTOL', dmg: 22, rate: 0.28, range: 55, mag: 12, ammo: 120, auto: false },
+    { id: 'smg', name: 'SMG', dmg: 14, rate: 0.09, range: 48, mag: 30, ammo: 240, auto: true },
+    { id: 'shotgun', name: 'SHOTGUN', dmg: 55, rate: 0.8, range: 26, mag: 6, ammo: 36, auto: false },
+  ],
+  districts: [
+    { id: 'lantern', name: 'LANTERN QUARTER', cx: 0, cz: 84, r: 78, standing: 50, color: '#ffb347' },
+    { id: 'pasaru', name: 'OLD PASARU', cx: -105, cz: 21, r: 70, standing: 58, color: '#ff6b9d' },
+    { id: 'banyan', name: 'BANYAN GREEN', cx: 105, cz: 21, r: 70, standing: 46, color: '#37e08a' },
+    { id: 'kumala', name: 'KUMALA STRAND', cx: 0, cz: -105, r: 78, standing: 52, color: '#8fd8ff' },
+    { id: 'ridge', name: 'RIDGE TOWN', cx: 0, cz: 168, r: 60, standing: 40, color: '#c9a2ff' },
+  ],
+  crew: [
+    { id: 'driver', name: 'DARA', role: 'Driver', ability: 'SWAP PLATES', key: 'KeyZ', cd: 45, desc: 'clear 1 wanted star' },
+    { id: 'mechanic', name: 'BENI', role: 'Mechanic', ability: 'QUICK FIX', key: 'KeyX', cd: 40, desc: 'repair car to 100%' },
+    { id: 'lookout', name: 'LANA', role: 'Lookout', ability: 'EYES OUT', key: 'KeyC', cd: 30, desc: 'mark all police 20s' },
+  ],
+  races: [
+    { id: 'terrace', name: 'TERRACE CLIMB', prize: 900, rp: 120, cps: [[0, 150], [84, 126], [84, 42], [0, 42], [-84, 84]] },
+    { id: 'lantern', name: 'LANTERN MILE', prize: 700, rp: 100, cps: [[-84, 84], [0, 84], [84, 84], [84, 0], [0, 0]] },
+    { id: 'ridge', name: 'RIDGE DESCENT', prize: 1100, rp: 140, cps: [[0, 168], [42, 126], [-42, 84], [-84, 0], [-84, -84]] },
+    { id: 'marina', name: 'MARINA SPRINT', prize: 800, rp: 110, cps: [[0, -126], [84, -126], [84, -42], [0, -42], [-84, -126]] },
+  ],
+  packages: [[-63, 105], [63, 105], [-105, -21], [105, -21], [21, 147], [-21, -147], [147, 63], [-147, 63], [105, 147], [-105, -147]],
+  stunts: [[-42, 126], [42, 42], [-84, -42], [84, 126], [0, -168]],
+  shops: { gun: { x: -63, z: 42, name: 'HARBOUR ARMS' }, spray: { x: 63, z: -84, name: 'LANTERN SPRAY' }, safehouse: { x: 21, z: 105, name: 'SAFEHOUSE' } },
+  taxiStands: [[-21, 84], [42, -21], [-42, -63]],
+  missions: [
+    { id: 1, name: 'LANTERN RUN', prize: 800, rp: 150, district: 'lantern',
+      intro: ['IVO MAREK', 'Rhea. The VPD impounded my getaway coupe on Lantern Row. Steal it back — quietly, then loudly.'],
+      stages: [
+        { text: 'STEAL THE GETAWAY CAR', type: 'steal', pos: [21, 84], hint: 'Press E near the gold coupe' },
+        { text: 'DRIVE TO THE LANTERN GATE', type: 'goto', pos: [84, 126], hint: 'Follow the gold marker' },
+        { text: 'LOSE THE HEAT', type: 'evade', pos: [84, 126], hint: 'Stay out of sight until wanted clears' },
+      ] },
+    { id: 2, name: 'CANAL PICKUP', prize: 1200, rp: 200, district: 'pasaru',
+      intro: ['IVO MAREK', 'A courier is pinned down at the Old Pasaru canal market. Clear the shooters, then grab the package.'],
+      stages: [
+        { text: 'REACH THE CANAL MARKET', type: 'goto', pos: [-105, 21], hint: 'On foot is safer in the market' },
+        { text: 'CLEAR THE AISLES', type: 'kill', count: 4, pos: [-105, 21], hint: 'Take out 4 shooters' },
+        { text: 'GRAB THE PACKAGE', type: 'goto', pos: [-84, 42], hint: 'Pick up the lantern case' },
+      ] },
+    { id: 3, name: 'DOCK HUSTLE', prize: 1500, rp: 220, district: 'kumala',
+      intro: ['DARA', 'A VPD truck full of seized lanterns sits at Kumala docks. Take it. Expect company.'],
+      stages: [
+        { text: 'STEAL THE VPD TRUCK', type: 'steal', pos: [0, -105], hint: 'Press E near the blue truck' },
+        { text: 'OUTRUN THE VPD', type: 'chase', pos: [-84, -84], hint: 'Reach the Banyan hideout at wanted 3' },
+        { text: 'DELIVER THE TRUCK', type: 'goto', pos: [-84, -84], hint: 'Park on the gold marker' },
+      ] },
+    { id: 4, name: 'TAIL JOB', prize: 1400, rp: 220, district: 'banyan',
+      intro: ['LANA', 'Chief Voss meets her fixer under the banyan trees. Tail him — close enough to see, far enough to live.'],
+      stages: [
+        { text: 'FIND THE FIXER', type: 'goto', pos: [105, 21], hint: 'Spot the grey sedan' },
+        { text: 'TAIL THE FIXER', type: 'tail', pos: [105, 21], dur: 20, hint: 'Stay 12–40m behind. Do not get spotted.' },
+        { text: 'PHOTOGRAPH THE MEETING', type: 'goto', pos: [63, 63], hint: 'Reach the overlook marker' },
+      ] },
+    { id: 5, name: 'VAULT ON THE WATER', prize: 2600, rp: 350, district: 'kumala',
+      intro: ['IVO MAREK', 'The floating vault bank moves its gold at midnight. Hit it hard — wanted 4 is the price.'],
+      stages: [
+        { text: 'BREACH THE VAULT BANK', type: 'goto', pos: [42, -105], hint: 'Reach the vault doors' },
+        { text: 'HOLD OFF THE VPD', type: 'kill', count: 6, pos: [42, -105], hint: 'Survive the response wave' },
+        { text: 'ESCAPE TO THE MARINA', type: 'goto', pos: [0, -168], hint: 'Lose them at the marina' },
+      ] },
+    { id: 6, name: 'THE GRAND LANTERN', prize: 5000, rp: 600, district: 'lantern',
+      intro: ['CHIEF DARA VOSS', 'Solano. You have robbed my island long enough. Tonight the Grand Lantern casino burns — and so do you.'],
+      stages: [
+        { text: 'ENTER THE GRAND LANTERN', type: 'goto', pos: [0, 84], hint: 'Walk into the casino doors' },
+        { text: 'CRACK THE CASINO VAULT', type: 'kill', count: 8, pos: [0, 84], hint: 'Clear the vault guards' },
+        { text: 'ESCAPE — HELICOPTER ON YOU', type: 'goto', pos: [0, -168], hint: 'Reach the marina boat at wanted 5' },
+      ] },
+  ],
+  policeNames: [
+    ['VPD-11', 'K. Aruna', 'Interceptor'], ['VPD-07', 'M. Sari', 'Interceptor'], ['VPD-23', 'J. Prasetyo', 'Patrol'],
+    ['VPD-31', 'L. Wijaya', 'Patrol'], ['VPD-42', 'R. Hadi', 'Roadblock'], ['VPD-55', 'S. Dewi', 'Foot Patrol'],
+    ['VPD-60', 'T. Nugroho', 'Foot Patrol'], ['VPD-77', 'A. Putri', 'Interceptor'],
+  ],
+  radioSongs: ['Night Kites — Mira Sol', 'Lanterns Down — The Koi Club', 'Canal Lights — DJ Pasaru', 'Volcano Heart — Sari Moon'],
 };
-
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
-};
-
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
-};
-
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
-export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
-};
-
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';

@@ -1,134 +1,67 @@
-// Boot and the one loop: input is read every frame, the world advances in fixed 1/60 s steps
-// (several in a slow frame, none in a fast one), and the renderer paints what is there. The game
-// moves between four screens: title, play, paused and game over.
-//
-// ?seed=N fixes the falling pattern. ?shot=start|play|end (with &seed=N) stages that scene
-// instead of running the loop, paints it twice and sets window.__shotReady for a screenshot.
-import { BEST_KEY, LIVES, STEP } from './config.js';
-import { createRandom } from './random.js';
-import { createWorld, EVENT_HIT, EVENT_OVER } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-import { stageShot } from './shots.js';
-
-/** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
-const MAX_FRAME = 0.25;
-
-const params = new URLSearchParams(window.location.search);
-const shot = params.get('shot');
-const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
-
-const canvas = document.getElementById('game');
-const status = document.getElementById('status');
-const world = createWorld(createRandom(seed));
-const renderer = createRenderer(canvas);
-
-function readBest() {
-  try {
-    return Number.parseInt(window.localStorage.getItem(BEST_KEY) ?? '0', 10) || 0;
-  } catch {
-    return 0;
+/* main.js — boot: seed from ?seed=, stage ?shot= scenes, expose debug hooks G.step/G.press/G.pl.
+   Fixed 1/60s simulation steps; the render loop just paints. */
+(function boot() {
+  const params = new URLSearchParams(location.search);
+  const seedParam = Number.parseInt(params.get('seed') || '', 10);
+  const seed = Number.isInteger(seedParam) ? seedParam : 7;
+  VEL.RNG.setSeed(seed);
+  VEL.Game.init();
+  const shot = params.get('shot');
+  if (params.get('god') !== null) VEL.State.god = true;
+  if (shot) {
+    // ?auto skips the title screen straight into play
+    VEL.Shots.stage(shot);
+    window.__shotReady = true;
+  } else if (params.get('auto') !== null) {
+    VEL.Game.newGame();
   }
-}
-
-function saveBest(value) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(value));
-  } catch {
-    // Storage can be off (private windows): the best score then lasts this visit only.
-  }
-}
-
-function runShot(name) {
-  const scene = stageShot(name, world);
-  let painted = 0;
-  function paint() {
-    renderer.draw(world.state, scene.screen, scene.best);
-    painted += 1;
-    if (painted < 2) requestAnimationFrame(paint);
-    else window.__shotReady = true;
-  }
-  requestAnimationFrame(paint);
-}
-
-function runGame() {
-  const input = createInput(canvas);
-  let screen = SCREEN_TITLE;
-  let best = readBest();
-  let accumulator = 0;
-  let last = performance.now();
-
-  // Screen readers (and anyone watching the page's text) hear the screen changes and each hit.
-  function announce(message) {
-    status.textContent = message;
-  }
-
-  function startGame() {
-    world.reset();
-    accumulator = 0;
-    screen = SCREEN_PLAY;
-    announce(`Playing. ${LIVES} lives.`);
-  }
-
-  function endGame() {
-    screen = SCREEN_OVER;
-    if (world.state.score > best) {
-      best = world.state.score;
-      saveBest(best);
-    }
-    announce(`Game over. Score ${world.state.score}. Best ${best}.`);
-  }
-
-  function handleActions() {
-    const actions = input.takeActions();
-    if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER)) startGame();
-    else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    } else if (actions & (ACTION_PAUSE | ACTION_CONFIRM) && screen === SCREEN_PAUSED) {
-      screen = SCREEN_PLAY;
-      announce('Playing.');
-    }
-  }
-
-  function step() {
-    if (screen === SCREEN_TITLE) {
-      world.step(STEP, 0, true);
-      return;
-    }
-    const events = world.step(STEP, input.direction(), false);
-    if (events & EVENT_OVER) endGame();
-    else if (events & EVENT_HIT) announce(world.state.lives === 1 ? 'Hit. 1 life left.' : `Hit. ${world.state.lives} lives left.`);
-  }
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, MAX_FRAME);
-    last = now;
-    handleActions();
-    if (screen === SCREEN_TITLE || screen === SCREEN_PLAY) {
-      while (accumulator >= STEP && (screen === SCREEN_TITLE || screen === SCREEN_PLAY)) {
-        step();
-        accumulator -= STEP;
-      }
-    } else {
-      accumulator = 0;
-    }
-    renderer.draw(world.state, screen, best);
-  }
-
-  // Leaving the tab pauses a running game rather than letting blocks fall unseen.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    }
-  });
-
-  announce('Block Dodger. Press Space or click to start.');
-  requestAnimationFrame(frame);
-}
-
-if (shot) runShot(shot);
-else runGame();
+  // ---- debug hooks (guizang style) ----
+  const G = window.G = {
+    state: VEL.State, cfg: VEL.CFG,
+    step(n, dt) {
+      n = n || 60; dt = dt || 1 / 60;
+      for (let i = 0; i < n; i++) VEL.Game.update(dt);
+      VEL.Game.renderer.render(VEL.Game.scene, VEL.Game.camera);
+      return G.pl();
+    },
+    upd(n, dt) {
+      n = n || 60; dt = dt || 1 / 60;
+      for (let i = 0; i < n; i++) VEL.Game.update(dt);
+      return G.pl();
+    },
+    press(...codes) { for (const c of codes) VEL.Input.pressed[c] = true; return G.pl(); },
+    keys(...codes) { for (const c of codes) VEL.Input.keys[c] = true; },
+    unkeys(...codes) { for (const c of codes) VEL.Input.keys[c] = false; },
+    pl() {
+      const S = VEL.State;
+      return {
+        screen: S.screen, playing: S.playing, dead: S.dead, hp: Math.round(S.hp), cash: S.cash, rp: S.rp,
+        wanted: S.wanted, inCar: S.inCar, carHp: S.car ? Math.round(S.car.hp) : null,
+        speed: S.car ? Math.round(Math.abs(S.car.speed) * 3.6) : 0,
+        x: Math.round(S.player.x), z: Math.round(S.player.z),
+        mission: VEL.Missions.active ? VEL.Missions.active.id : null,
+        stage: VEL.Missions.active ? VEL.Missions.stageIdx : null,
+        missionsDone: Object.keys(VEL.Missions.done).length,
+        racesDone: Object.keys(VEL.Races.done).length,
+        police: VEL.Police.units.length, heli: !!VEL.Police.heli,
+        enemies: VEL.People.enemies.filter((e) => !e.dead).length,
+        packages: S.packagesGot.length, stunts: S.stuntsDone.length,
+        taxiFares: S.stats.taxiFares, exports: S.exportsDone,
+        completion: VEL.Stats.completion(),
+      };
+    },
+    teleport(x, z) { const S = VEL.State; S.player.x = x; S.player.z = z; if (S.inCar && S.car) { S.car.x = x; S.car.z = z; } S.player.mesh.position.set(x, 0, z); return G.pl(); },
+    setWanted(n) { VEL.Police.setWanted(n); return G.pl(); },
+    startMission(id) { VEL.Missions.start(id); return G.pl(); },
+    startRace(id) { VEL.Races.start(id); return G.pl(); },
+    spawn(kind, x, z) {
+      if (kind === 'enemy') return VEL.People.spawnEnemy(x, z, {});
+      if (kind === 'car') return VEL.Vehicles.spawnCar(x, z, 0, {});
+      return null;
+    },
+    shoot() { VEL.Combat.tryFire(); return G.pl(); },
+    save(slot) { return VEL.Save.save(slot || 1); },
+    load(slot) { return VEL.Save.load(slot || 1); },
+  };
+  window.__gameReady = true;
+})();

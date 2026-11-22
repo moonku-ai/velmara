@@ -1,79 +1,70 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
+/* shots.js — ?shot= scenes: stage a real gameplay state, step it forward, flag __shotReady.
+   play = M6 chase (wanted 5, heli, police, in car at speed)
+   shootout = M2 on-foot night-market firefight
+   stats = Tab career/map screen
+   title = title screen over the lantern quarter */
+VEL.Shots = {
+  stage(name) {
+    const S = VEL.State, G = VEL.Game;
+    const seed = Number(new URLSearchParams(location.search).get('seed') || 1);
+    VEL.RNG.setSeed(seed);
+    if (name === 'title') {
+      S.screen = 'title';
+      return;
     }
-  }
-  return Infinity;
-}
-
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
+    // common: enter play, new game state, rich HUD
+    G.newGame();
+    S.cash = 18450; S.rp = 3900; S.armour = 55; S.hp = 72;
+    S.stats.carsStolen = 41; S.stats.copsEscaped = 12; S.stats.takenOut = 23; S.stats.distanceDriven = 48200;
+    if (name === 'play') {
+      // M6 chase: wanted 5, heli, in the gold getaway coupe at speed, police converging
+      VEL.Missions.start(6);
+      VEL.Missions.enterStage(2);
+      const car = G.spawnMissionCar(0, 60, 0xff8a3d, 'SUNSET GT');
+      car.speed = 34; car.heading = Math.PI;
+      S.player.x = 0; S.player.z = 60; S.player.heading = Math.PI;
+      G.enterCar(car);
+      VEL.Police.setWanted(5);
+      for (let i = 0; i < 3; i++) VEL.Police.spawnUnit();
+      VEL.Districts.bump('kumala', 8);
+      VEL.HUD.dialog('CHIEF DARA VOSS', 'Solano. You have robbed my island long enough. Tonight the Grand Lantern burns — and so do you.');
+      VEL.HUD.toast('MISSION 6 · THE GRAND LANTERN — ESCAPE TO THE MARINA');
+    } else if (name === 'shootout') {
+      // M2 on-foot firefight at the canal market, night
+      VEL.Missions.start(2);
+      VEL.Missions.enterStage(1);
+      S.player.x = -105; S.player.z = 40; S.player.heading = Math.PI;
+      S.player.mesh.position.set(-105, 0, 40);
+      S.weaponIdx = 2; // SMG
+      VEL.Police.setWanted(2);
+      VEL.HUD.dialog('IVO MAREK', 'Duck by a stall to hide. Clear the aisles, Rhea — the package is in the lantern case.');
+      VEL.HUD.toast('MISSION 2 · CANAL PICKUP — CLEAR THE AISLES');
+    } else if (name === 'stats') {
+      // career screen with progress already earned
+      VEL.Missions.done = { 1: true, 2: true, 3: true, 4: true, 5: true };
+      VEL.Missions.medals = { 1: 'GOLD', 2: 'SILVER', 3: 'GOLD', 4: 'BRONZE', 5: 'SILVER' };
+      VEL.Races.done = { lantern: true }; VEL.Races.best = { lantern: 74.3 };
+      S.packagesGot = VEL.CFG.packages.slice(0, 6).map((p) => p[0] + ',' + p[1]);
+      S.stuntsDone = VEL.CFG.stunts.slice(0, 3).map((p) => p[0] + ',' + p[1]);
+      S.exportsDone = 2; S.stats.taxiFares = 2;
+      S.stats.missionsDone = 5; S.stats.racesWon = 1; S.stats.cashEarned = 21400; S.stats.crewUses = 9;
+      S.cash = 18450; S.rp = 3900;
+      VEL.Districts.list[0].standing = 74; VEL.Districts.list[1].standing = 74; VEL.Districts.list[2].standing = 70; VEL.Districts.list[4].standing = 34;
+      S.screen = 'play'; S.playing = true;
+      VEL.HUD.showHud();
+      S.statsOpen = true; VEL.HUD.showStats();
     }
-  }
-  return best;
-}
-
-/**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
- */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
-  }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
-  }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
-}
+    // step the world forward so motion, AI and HUD settle
+    for (let i = 0; i < 150; i++) G.update(1 / 60);
+    if (name === 'play') {
+      // drive forward a bit so the chase reads at speed
+      VEL.Input.keys.KeyW = true;
+      for (let i = 0; i < 120; i++) G.update(1 / 60);
+      VEL.Input.keys.KeyW = false;
+    }
+    if (name === 'shootout') {
+      for (let i = 0; i < 90; i++) G.update(1 / 60);
+    }
+    window.__shotReady = true;
+  },
+};
