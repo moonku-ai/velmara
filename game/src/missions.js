@@ -22,7 +22,7 @@ VEL.Missions = {
     VEL.HUD.setObjective(st.text + ' — ' + st.hint);
     // stage setup
     if (a.def.id === 1 && i === 0) VEL.Game.spawnMissionCar(21, 84, 0xffb347, 'GETAWAY COUPE');
-    if (a.def.id === 2 && i === 1) for (let k = 0; k < 4; k++) VEL.People.spawnEnemy(-105 + (k % 2) * 14 - 7, 21 + Math.floor(k / 2) * 14 - 7, { name: 'MARKET SHOOTER' });
+    if (a.def.id === 2 && i === 1) for (let k = 0; k < 4; k++) VEL.People.spawnEnemy(-84 + (k % 2) * 14 - 7, 21 + Math.floor(k / 2) * 14 - 7, { name: 'MARKET SHOOTER' });
     if (a.def.id === 3 && i === 0) VEL.Game.spawnMissionCar(0, -105, 0x2a6bff, 'VPD TRUCK', true);
     if (a.def.id === 3 && i === 1) VEL.Police.setWanted(3);
     if (a.def.id === 4 && i === 0) VEL.People.spawnTailTarget(105, 21);

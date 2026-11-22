@@ -98,11 +98,11 @@ VEL.Police = {
         u.x = car.x; u.z = car.z;
         if (u.lightbar) u.lightbar.material.color.setHex(Math.sin(t * 12) > 0 ? 0xff2233 : 0x2244ff);
         if (S.inCar && S.car && d < 4.5) {
-          // ram damage
-          S.car.hp -= dt * 14; VEL.Audio.crash(); S.stats.copsEscaped += 0;
+          // ram: slow the car, damage it unless god mode (used for staged screenshots)
+          if (!S.god) { S.car.hp -= dt * 6; VEL.Audio.crash(); }
           car.speed *= 0.6;
         }
-        if (d < 3 && !S.inCar) { S.hp -= dt * 8; }
+        if (d < 3 && !S.inCar && !S.god) { S.hp -= dt * 8; }
       } else {
         const dir = Math.atan2(S.player.x - u.x, S.player.z - u.z);
         const nx = u.x + Math.sin(dir) * u.speed * dt, nz = u.z + Math.cos(dir) * u.speed * dt;

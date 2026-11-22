@@ -114,11 +114,13 @@ VEL.Game = {
     setTimeout(() => { document.getElementById('vignette').style.background = ''; }, 220);
     if (S.hp <= 0) this.wasted();
   },
-  carDamage(d) {
+  carDamage(car, d) {
     const S = VEL.State;
-    if (S.inCar && S.car) {
+    if (S.inCar && S.car === car) {
       S.car.hp -= d;
       if (S.car.hp <= 0) { S.car.hp = 0; VEL.HUD.toast('CAR WRECKED!'); VEL.Audio.crash(); this.exitCar(); }
+    } else if (car && !car.isTraffic) {
+      car.hp = Math.max(10, (car.hp || 100) - d); // police cars dent, never wreck from a wall
     }
   },
   wasted() {
@@ -142,12 +144,13 @@ VEL.Game = {
   nearestInteract() {
     const S = VEL.State, p = S.player;
     const near = (x, z, r) => Math.hypot(x - p.x, z - p.z) < r;
+    // small-radius pickups first: a parked car must not shadow a package or stunt
+    for (const [x, z] of VEL.CFG.packages) if (!S.packagesGot.includes(x + ',' + z) && near(x, z, 4)) return { kind: 'package', x, z, text: 'COLLECT HIDDEN PACKAGE' };
+    for (const [x, z] of VEL.CFG.stunts) if (!S.stuntsDone.includes(x + ',' + z) && near(x, z, 6)) return { kind: 'stunt', x, z, text: 'STUNT JUMP — DRIVE THROUGH FAST' };
     if (!S.inCar) {
       const car = VEL.Vehicles.nearestCar(p.x, p.z, 5);
       if (car) return { kind: 'car', car, text: 'STEAL ' + car.name };
     }
-    for (const [x, z] of VEL.CFG.packages) if (!S.packagesGot.includes(x + ',' + z) && near(x, z, 4)) return { kind: 'package', x, z, text: 'COLLECT HIDDEN PACKAGE' };
-    for (const [x, z] of VEL.CFG.stunts) if (!S.stuntsDone.includes(x + ',' + z) && near(x, z, 6)) return { kind: 'stunt', x, z, text: 'STUNT JUMP — DRIVE THROUGH FAST' };
     const sh = VEL.CFG.shops;
     if (near(sh.gun.x, sh.gun.z, 6)) return { kind: 'gunshop', text: 'BUY AMMO ($200) / ARMOUR ($300)' };
     if (near(sh.spray.x, sh.spray.z, 6)) return { kind: 'spray', text: 'RESPRAY — CLEAR WANTED ($150)' };
@@ -298,6 +301,7 @@ VEL.Game = {
     VEL.Input.endFrame();
   },
   loop() {
+    if (window.__freeze) return; // debug hook: stop the loop so a screenshot can be taken
     requestAnimationFrame(this.loop);
     const dt = 1 / 60;
     // pause / stats toggles handled here so they work even when update() early-returns
@@ -311,9 +315,9 @@ VEL.Game = {
         if (VEL.State.statsOpen) VEL.HUD.showStats(); else VEL.HUD.hideStats();
       }
     }
-    if (VEL.State.screen === 'title') { this.updateTitleScene(dt); VEL.Input.endFrame(); this.renderer.render(this.scene, this.camera); return; }
+    if (VEL.State.screen === 'title') { this.updateTitleScene(dt); VEL.Input.endFrame(); if (!window.__noRender) this.renderer.render(this.scene, this.camera); return; }
     this.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    if (!window.__noRender) this.renderer.render(this.scene, this.camera);
   },
   updateTitleScene(dt) {
     // slow cinematic orbit over the lantern quarter for the title backdrop

@@ -23,9 +23,9 @@ VEL.Shots = {
       const car = G.spawnMissionCar(0, 60, 0xff8a3d, 'SUNSET GT');
       car.speed = 34; car.heading = Math.PI;
       S.player.x = 0; S.player.z = 60; S.player.heading = Math.PI;
+      S.god = true; // staged shot: police may not wreck the getaway car
       G.enterCar(car);
       VEL.Police.setWanted(5);
-      for (let i = 0; i < 3; i++) VEL.Police.spawnUnit();
       VEL.Districts.bump('kumala', 8);
       VEL.HUD.dialog('CHIEF DARA VOSS', 'Solano. You have robbed my island long enough. Tonight the Grand Lantern burns — and so do you.');
       VEL.HUD.toast('MISSION 6 · THE GRAND LANTERN — ESCAPE TO THE MARINA');
@@ -33,9 +33,10 @@ VEL.Shots = {
       // M2 on-foot firefight at the canal market, night
       VEL.Missions.start(2);
       VEL.Missions.enterStage(1);
-      S.player.x = -105; S.player.z = 40; S.player.heading = Math.PI;
-      S.player.mesh.position.set(-105, 0, 40);
+      S.player.x = -84; S.player.z = 40; S.player.heading = Math.PI;
+      S.player.mesh.position.set(-84, 0, 40);
       S.weaponIdx = 2; // SMG
+      S.god = true; // staged shot: keep Rhea at the staged HP
       VEL.Police.setWanted(2);
       VEL.HUD.dialog('IVO MAREK', 'Duck by a stall to hide. Clear the aisles, Rhea — the package is in the lantern case.');
       VEL.HUD.toast('MISSION 2 · CANAL PICKUP — CLEAR THE AISLES');
@@ -61,9 +62,19 @@ VEL.Shots = {
       VEL.Input.keys.KeyW = true;
       for (let i = 0; i < 120; i++) G.update(1 / 60);
       VEL.Input.keys.KeyW = false;
+      const pc = VEL.State.car;
+      if (pc) { pc.speed = 34; pc.hp = 100; } // hold speed + condition for the final frame
     }
     if (name === 'shootout') {
       for (let i = 0; i < 90; i++) G.update(1 / 60);
+      // close in on the shooters so the firefight reads in frame
+      const foes = VEL.People.enemies.filter((e) => !e.dead);
+      if (foes.length) {
+        const f = foes[0];
+        S.player.x = f.x; S.player.z = f.z + 11; S.player.heading = Math.PI;
+        S.player.mesh.position.set(S.player.x, 0, S.player.z);
+        for (let i = 0; i < 60; i++) G.update(1 / 60);
+      }
     }
     window.__shotReady = true;
   },

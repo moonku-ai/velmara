@@ -44,7 +44,7 @@ VEL.Combat = {
       if (ref.hp <= 0 && !ref.dead) {
         ref.dead = true;
         ref.mesh.rotation.x = -Math.PI / 2; ref.mesh.position.y = 0.4;
-        S.stats.takenOut++; S.stats.killsThisMission++;
+        S.stats.takenOut++; S.stats.killsThisMission++; S.killsThisMission++;
         VEL.Police.addWanted(0); // killing already-heated enemies keeps heat
         VEL.HUD.toast(ref.name + ' DOWN');
         setTimeout(() => VEL.People.removeEnemy(ref), 4000);

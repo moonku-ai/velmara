@@ -56,7 +56,7 @@ VEL.Vehicles = {
     const nx = car.x + Math.sin(car.heading) * car.speed * dt;
     const nz = car.z + Math.cos(car.heading) * car.speed * dt;
     const p = VEL.City.collide(nx, nz, 2.2);
-    if (Math.abs(p.x - nx) > 0.01 || Math.abs(p.z - nz) > 0.01) { car.speed *= 0.55; VEL.Game.carDamage(Math.abs(car.speed) * 0.4); }
+    if (Math.abs(p.x - nx) > 0.01 || Math.abs(p.z - nz) > 0.01) { car.speed *= 0.55; VEL.Game.carDamage(car, Math.abs(car.speed) * 0.4); }
     car.x = p.x; car.z = p.z;
     car.mesh.position.set(car.x, 0, car.z);
     car.mesh.rotation.y = car.heading;

@@ -67,7 +67,7 @@ html,body{height:100%;overflow:hidden;background:#0b0e1e;font-family:"Segoe UI",
 #mission-pass .big.gold{color:#ffd98a}
 #wasted .sub,#mission-pass .sub{font-size:16px;color:#fff;margin-top:8px}
 #pass-detail{font-size:15px;color:#bfe9e2;margin-top:6px}
-#stats-screen{position:absolute;inset:0;background:rgba(6,8,20,.94);z-index:8;overflow:auto}
+#stats-screen{position:absolute;inset:0;background:#060814;z-index:8;overflow:auto}
 .stats-inner{max-width:980px;margin:24px auto;padding:20px}
 .stats-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #ffb347;padding-bottom:8px}
 .stats-head h1{font-size:26px;letter-spacing:3px;color:#ffd98a}
