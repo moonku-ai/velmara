@@ -120,11 +120,23 @@ const Missions = {
     } else if (st.type === 'tail') {
       const t = Missions.tailCar;
       if (t) {
-        // Courier loops the ridge road slowly.
-        t.ai.angle += dt * 0.12;
-        t.x = 60 + Math.sin(t.ai.angle) * 60;
-        t.z = -120 + Math.cos(t.ai.angle) * 40;
-        t.yaw = Math.atan2(-Math.cos(t.ai.angle), Math.sin(t.ai.angle));
+        // Courier loops the ridge-road rectangle ON the roads (same loop a
+        // player can follow), ~6 m/s — an ellipse through the blocks would
+        // force any follower off-road into buildings.
+        const pts = [[0, -60], [120, -60], [120, -120], [0, -120]];
+        if (t.ai.ci === undefined) t.ai.ci = 2; // spawn (60,-120) heads west
+        const [tx, tz] = pts[t.ai.ci];
+        const dx = tx - t.x, dz = tz - t.z;
+        if (Math.hypot(dx, dz) < 3) { t.ai.ci = (t.ai.ci + 1) % pts.length; }
+        else {
+          const des = Math.atan2(-dx, -dz);
+          let dy = des - t.yaw;
+          while (dy > Math.PI) dy -= Math.PI * 2;
+          while (dy < -Math.PI) dy += Math.PI * 2;
+          t.yaw += Math.max(-1.5 * dt, Math.min(1.5 * dt, dy));
+          t.x += -Math.sin(t.yaw) * 6 * dt;
+          t.z += -Math.cos(t.yaw) * 6 * dt;
+        }
         t.mesh.position.set(t.x, 0, t.z);
         t.mesh.rotation.y = t.yaw;
         const td = Math.hypot(p.x - t.x, p.z - t.z);
